@@ -13,7 +13,6 @@ import Observation
 class VoltapeakViewModel {
     
     var config = SWVFileConfiguration()
-    var analysisConfig = AnalysisConfiguration.optimized  // Configuration optimisée
     var currentAnalysis: VoltammetryAnalysis?
     var isProcessing = false
     var errorMessage: String?
@@ -37,45 +36,32 @@ class VoltapeakViewModel {
             print("   Potentiel min: \(potentials.first ?? 0) V, max: \(potentials.last ?? 0) V")
             print("   Courant min: \(currents.min() ?? 0) A, max: \(currents.max() ?? 0) A")
             
-            // Étape 3 : Lissage Savitzky-Golay AMÉLIORÉ
-            let smoothed = SignalProcessingImproved.savitzkyGolayFilter(
-                currents,
-                windowLength: analysisConfig.savgolWindowLength,
-                polynomialOrder: analysisConfig.savgolPolynomialOrder
-            )
-            print("🔄 Signal lissé")
+            // Étape 3 : Lissage Savitzky-Golay (coefficients scipy EXACTS)
+            let smoothed = SavitzkyGolaySimple.filter(currents, windowLength: 11, polynomialOrder: 2)
+            print("🔄 Signal lissé (Savitzky-Golay scipy)")
             print("   Courant lissé min: \(smoothed.min() ?? 0) A, max: \(smoothed.max() ?? 0) A")
             
             // Étape 4 : Détection du pic brut
             let (peakPotential, peakCurrent) = SignalProcessing.detectPeak(
                 signal: smoothed,
                 potentials: potentials,
-                marginRatio: analysisConfig.peakMarginRatio,
-                maxSlope: analysisConfig.peakMaxSlope
+                marginRatio: 0.10,
+                maxSlope: 500
             )
             print("🎯 Pic brut détecté : \(peakPotential) V, \(peakCurrent * 1e3) mA")
             
-            // Étape 5 : Estimation de la baseline (asPLS AMÉLIORÉ avec config optimisée)
-            let (baseline, exclusionRange) = SignalProcessingImproved.calculateBaselineASPLS(
+            // Étape 5 : Estimation de la baseline (asPLS AMÉLIORÉ)
+            let (baseline, _) = SignalProcessingImproved.calculateBaselineASPLS(
                 signal: smoothed,
                 potentials: potentials,
                 peakPotential: peakPotential,
-                exclusionWidthRatio: analysisConfig.baselineExclusionRatio,
-                lambdaFactor: analysisConfig.baselineLambdaFactor,
-                maxIterations: analysisConfig.baselineMaxIterations,
-                tolerance: analysisConfig.baselineTolerance
+                exclusionWidthRatio: 0.03,
+                lambdaFactor: 1e3,
+                maxIterations: 25,
+                tolerance: 1e-2
             )
-            print("📉 Baseline estimée (lambda=\(analysisConfig.baselineLambdaFactor), exclusion=\(analysisConfig.baselineExclusionRatio*100)%)")
+            print("📉 Baseline estimée")
             print("   Baseline min: \(baseline.min() ?? 0) A, max: \(baseline.max() ?? 0) A")
-            print("   Zone d'exclusion: [\(exclusionRange.0) V, \(exclusionRange.1) V]")
-            
-            // DEBUG: Comparer au niveau du pic
-            if let peakIdx = potentials.firstIndex(where: { abs($0 - peakPotential) < 0.001 }) {
-                print("   Au pic (\(peakPotential) V):")
-                print("     Signal lissé: \(smoothed[peakIdx] * 1e3) mA")
-                print("     Baseline: \(baseline[peakIdx] * 1e3) mA")
-                print("     Différence: \((smoothed[peakIdx] - baseline[peakIdx]) * 1e3) mA")
-            }
             
             // Étape 6 : Signal corrigé = lissé - baseline
             let corrected = zip(smoothed, baseline).map { $0 - $1 }
@@ -86,11 +72,10 @@ class VoltapeakViewModel {
             let (correctedPeakPotential, correctedPeakCurrent) = SignalProcessing.detectPeak(
                 signal: corrected,
                 potentials: potentials,
-                marginRatio: analysisConfig.peakMarginRatio,
-                maxSlope: analysisConfig.peakMaxSlope
+                marginRatio: 0.10,
+                maxSlope: 500
             )
             print("🎯 Pic corrigé détecté : \(correctedPeakPotential) V, \(correctedPeakCurrent * 1e3) mA")
-            print("   📊 Comparaison avec Python : attendu ~6.93 mA")
             
             // Création du résultat d'analyse
             let analysis = VoltammetryAnalysis(

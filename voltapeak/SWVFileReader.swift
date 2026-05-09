@@ -111,16 +111,17 @@ class SWVFileReader {
         return points
     }
     
-    /// Traite les données brutes : tri et inversion du signe du courant
+    /// Traite les données brutes : tri et inversion du signe du courant (COMME PYTHON)
     /// - Parameter points: Points bruts
     /// - Returns: Tuple (potentiels, courants) triés
     static func processData(_ points: [VoltammetryPoint]) -> (potentials: [Double], currents: [Double]) {
         // Tri par potentiel croissant
         let sorted = points.sorted { $0.potential < $1.potential }
         
-        // Extraction et inversion du signe (convention SWV cathodique)
+        // Extraction et inversion du signe (EXACTEMENT comme le code Python)
+        // Python fait : signalValues = -dataFrame["Current"].values
         let potentials = sorted.map { $0.potential }
-        let currents = sorted.map { -$0.current }
+        let currents = sorted.map { -$0.current }  // INVERSION comme Python
         
         return (potentials, currents)
     }

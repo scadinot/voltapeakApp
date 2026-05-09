@@ -203,18 +203,21 @@ enum WhittakerASPLS {
         var bCopy = b
         var nInt = __CLPK_integer(n)
         var nrhs = __CLPK_integer(1)
+        var lda = __CLPK_integer(n)
+        var ldb = __CLPK_integer(n)
         var info: __CLPK_integer = 0
+        var uplo: [CChar] = Array("L".utf8CString)  // Lower triangle
         
         // Décomposition de Cholesky + résolution
         // dposv résout A*X = B où A est symétrique définie positive
         dposv_(
-            UnsafeMutablePointer(mutating: ("L" as NSString).utf8String),  // Lower triangle
+            &uplo,
             &nInt,
             &nrhs,
             &aFlat,
-            &nInt,
+            &lda,
             &bCopy,
-            &nInt,
+            &ldb,
             &info
         )
         

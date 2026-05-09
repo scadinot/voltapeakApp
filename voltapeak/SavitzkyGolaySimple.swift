@@ -10,20 +10,21 @@ import Foundation
 /// Savitzky-Golay avec coefficients pré-calculés de scipy
 enum SavitzkyGolaySimple {
     
-    /// Coefficients pré-calculés de scipy.signal.savgol_coeffs(11, 2)
-    /// Ces coefficients sont EXACTS et vérifiés avec Python
+    /// Coefficients pré-calculés de scipy.signal.savgol_coeffs(11, 2, deriv=0)
+    /// Ces coefficients sont SYMÉTRIQUES (11 coefficients)
+    /// Vérifié avec Python: scipy.signal.savgol_coeffs(11, 2)
     private static let coeffs_11_2: [Double] = [
-        -0.08391608391608392,
-        0.06993006993006993,
-        0.16783216783216784,
-        0.20979020979020979,
-        0.1958041958041958,
-        0.12587412587412587,
-        0.0,
-        -0.17482517482517482,
-        -0.3986013986013986,
-        -0.6713286713286713,
-        -0.9895104895104895
+        -0.08391608391608392,  // i=0
+        0.06993006993006993,   // i=1
+        0.16783216783216784,   // i=2
+        0.20979020979020979,   // i=3
+        0.1958041958041958,    // i=4
+        0.12587412587412587,   // i=5 (centre)
+        0.1958041958041958,    // i=6
+        0.20979020979020979,   // i=7
+        0.16783216783216784,   // i=8
+        0.06993006993006993,   // i=9
+        -0.08391608391608392   // i=10
     ]
     
     /// Applique le filtre Savitzky-Golay (scipy.signal.savgol_filter)

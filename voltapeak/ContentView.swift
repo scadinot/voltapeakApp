@@ -10,7 +10,7 @@ import Charts
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @State private var viewModel = VoltapeakViewModel()
+    @State private var viewModel = VoltapeakViewModel()  // Retour au ViewModel optimisé
     @State private var selectedFileURL: URL?
     @State private var showingFileImporter = false
     @State private var showingErrorAlert = false
