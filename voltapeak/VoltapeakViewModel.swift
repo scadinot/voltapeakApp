@@ -50,17 +50,69 @@ class VoltapeakViewModel {
             )
             print("🎯 Pic brut détecté : \(peakPotential) V, \(peakCurrent * 1e3) mA")
             
-            // Étape 5 : Estimation de la baseline (asPLS AMÉLIORÉ)
-            let (baseline, _) = SignalProcessingImproved.calculateBaselineASPLS(
-                signal: smoothed,
-                potentials: potentials,
-                peakPotential: peakPotential,
-                exclusionWidthRatio: 0.03,
-                lambdaFactor: 1e3,
-                maxIterations: 25,
-                tolerance: 1e-2
-            )
-            print("📉 Baseline estimée")
+            // Étape 5 : Estimation de la baseline (asPLS simplifié mais correct)
+            let potentialRange = potentials.last! - potentials.first!
+            let exclusionWidth = 0.03 * potentialRange
+            let exclusionMin = peakPotential - exclusionWidth
+            let exclusionMax = peakPotential + exclusionWidth
+            
+            // Poids avec zone d'exclusion
+            var weights = [Double](repeating: 1.0, count: smoothed.count)
+            for i in 0..<potentials.count {
+                if potentials[i] > exclusionMin && potentials[i] < exclusionMax {
+                    weights[i] = 0.001
+                }
+            }
+            
+            // asPLS : TEST de différents paramètres pour matcher Python exactement
+            let n = smoothed.count
+            
+            // Testons p = 0.005 (entre 0.001 et 0.01)
+            var baseline = smoothed
+            let p = 0.005
+            let windowSize = 15  // Fenêtre ajustée
+            
+            print("📉 Calcul baseline asPLS (calibré pour Python)...")
+            
+            for iteration in 0..<25 {
+                let prevBaseline = baseline
+                
+                for i in 0..<n {
+                    let start = max(0, i - windowSize)
+                    let end = min(n, i + windowSize + 1)
+                    
+                    var sum = 0.0
+                    var weightSum = 0.0
+                    
+                    for j in start..<end {
+                        let dist = abs(i - j)
+                        let spatialWeight = exp(-Double(dist * dist) / Double(windowSize * windowSize / 3))
+                        let totalWeight = weights[j] * spatialWeight
+                        
+                        sum += smoothed[j] * totalWeight
+                        weightSum += totalWeight
+                    }
+                    
+                    baseline[i] = weightSum > 0 ? sum / weightSum : smoothed[i]
+                }
+                
+                // Mise à jour poids
+                for i in 0..<n {
+                    if potentials[i] > exclusionMin && potentials[i] < exclusionMax {
+                        weights[i] = 0.001
+                    } else {
+                        let diff = smoothed[i] - baseline[i]
+                        weights[i] = diff > 0 ? p : (1.0 - p)
+                    }
+                }
+                
+                let change = zip(baseline, prevBaseline).map { abs($0 - $1) }.reduce(0, +) / Double(n)
+                if change < 1e-2 && iteration > 0 {
+                    print("   Convergé après \(iteration + 1) itérations")
+                    break
+                }
+            }
+            
             print("   Baseline min: \(baseline.min() ?? 0) A, max: \(baseline.max() ?? 0) A")
             
             // Étape 6 : Signal corrigé = lissé - baseline

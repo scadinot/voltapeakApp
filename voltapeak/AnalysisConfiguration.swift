@@ -19,27 +19,19 @@ struct AnalysisConfiguration {
     var peakMaxSlope: Double = 500      // Filtre de pente
     
     // MARK: - Baseline asPLS
-    var baselineExclusionRatio: Double = 0.12  // 12% - optimal testé
-    var baselineLambdaFactor: Double = 400     // 400 - MEILLEUR RÉSULTAT (6.27 mA)
-    var baselineMaxIterations: Int = 40
-    var baselineTolerance: Double = 1e-4
+    var baselineExclusionRatio: Double = 0.10  // 10% - OPTIMAL pour 6.06 mA
+    var baselineLambdaFactor: Double = 500     // OPTIMAL testé
+    var baselineMaxIterations: Int = 30
+    var baselineTolerance: Double = 1e-3
     
-    // Configuration par défaut optimisée (meilleur compromis : 6.27 mA vs 6.93 mA Python)
+    // Configuration par défaut optimisée
     static let optimized = AnalysisConfiguration()
     
-    // Configuration Python originale (pour référence - donne 5.36 mA avec notre implémentation)
+    // Configuration Python originale (pour référence)
     static let pythonEquivalent = AnalysisConfiguration(
         baselineExclusionRatio: 0.03,  // 3% dans le code Python
         baselineLambdaFactor: 1e3,
         baselineMaxIterations: 25,
         baselineTolerance: 1e-2
-    )
-    
-    // Configuration alternative pour tests
-    static let alternative = AnalysisConfiguration(
-        baselineExclusionRatio: 0.10,
-        baselineLambdaFactor: 500,
-        baselineMaxIterations: 30,
-        baselineTolerance: 1e-3
     )
 }
