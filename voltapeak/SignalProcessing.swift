@@ -138,27 +138,38 @@ enum SignalProcessing {
         
         // Version simplifiée de asPLS : fit polynomial pondéré
         // Pour une vraie implémentation asPLS, il faudrait itérer
-        var baseline = polynomialFit(signal: signal, weights: weights, degree: 3)
+        let baseline = polynomialFit(signal: signal, weights: weights, degree: 3)
         
         return (baseline, (exclusionMin, exclusionMax))
     }
     
     // MARK: - Helper Functions
     
-    /// Calcule le gradient (dérivée numérique) d'un signal
+    /// Calcule le gradient (dérivée numérique) d'un signal — reproduit `numpy.gradient(y, x)`
+    ///
+    /// Bords : différences finies 1ᵉʳ ordre (edge_order=1, défaut numpy).
+    /// Intérieur : différences centrées 2ᵉ ordre pour pas non-uniformes, avec
+    /// `hd = x[i] − x[i−1]`, `hs = x[i+1] − x[i]` :
+    ///   grad[i] = −hs/(hd·(hd+hs))·y[i−1] + (hs−hd)/(hd·hs)·y[i] + hd/(hs·(hd+hs))·y[i+1]
     private static func gradient(_ y: [Double], x: [Double]) -> [Double] {
         var grad = [Double](repeating: 0, count: y.count)
-        
-        for i in 0..<y.count {
+        let n = y.count
+
+        for i in 0..<n {
             if i == 0 {
                 grad[i] = (y[1] - y[0]) / (x[1] - x[0])
-            } else if i == y.count - 1 {
+            } else if i == n - 1 {
                 grad[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
             } else {
-                grad[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
+                let hd = x[i] - x[i-1]
+                let hs = x[i+1] - x[i]
+                let a = -hs / (hd * (hd + hs))
+                let b = (hs - hd) / (hd * hs)
+                let c = hd / (hs * (hd + hs))
+                grad[i] = a * y[i-1] + b * y[i] + c * y[i+1]
             }
         }
-        
+
         return grad
     }
     
