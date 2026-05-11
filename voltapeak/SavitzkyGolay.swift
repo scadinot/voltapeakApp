@@ -2,13 +2,13 @@
 //  SavitzkyGolaySimple.swift
 //  voltapeak
 //
-//  Implémentation simplifiée mais CORRECTE de Savitzky-Golay
+//  Implémentation de Savitzky-Golay
 //
 
 import Foundation
 
 /// Savitzky-Golay avec coefficients pré-calculés de scipy
-enum SavitzkyGolaySimple {
+enum SavitzkyGolay {
     
     /// scipy.signal.savgol_coeffs(window_length=11, polyorder=2, pos=p, use='dot') pour p ∈ 0..10
     ///

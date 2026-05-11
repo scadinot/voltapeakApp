@@ -8,7 +8,6 @@
 //
 
 import Foundation
-import Accelerate
 
 /// Implémentation EXACTE de pybaselines.whittaker.aspls (Zhang 2020)
 ///
@@ -208,81 +207,12 @@ enum WhittakerASPLS {
         return DTD
     }
     
-    /// Résout le système pondéré : (W + λ D^T D) z = W y
-    /// En Python : Z = W + lam * DTD; z = spsolve(Z, w * y)
-    /// où W = diags(w) est une matrice diagonale
-    private static func solveWeightedSystem(y: [Double], w: [Double], DTD: [[Double]], lam: Double) -> [Double] {
-        let n = y.count
-        
-        // Construire la matrice du système : A = W + λ D^T D
-        // En Python : Z = diags(w) + lam * DTD
-        var A = [[Double]](repeating: [Double](repeating: 0.0, count: n), count: n)
-        
-        for i in 0..<n {
-            for j in 0..<n {
-                if i == j {
-                    // Diagonale : W[i,i] + λ * DTD[i,i] = w[i] + λ * DTD[i,i]
-                    A[i][j] = w[i] + lam * DTD[i][j]
-                } else {
-                    // Hors diagonale : 0 + λ * DTD[i,j]
-                    A[i][j] = lam * DTD[i][j]
-                }
-            }
-        }
-        
-        // Vecteur de droite : b = W y = w * y (produit élément par élément)
-        var b = [Double](repeating: 0.0, count: n)
-        for i in 0..<n {
-            b[i] = w[i] * y[i]
-        }
-        
-        // Résoudre le système linéaire A z = b
-        // Python utilise scipy.sparse.linalg.spsolve (décomposition de Cholesky)
-        // On utilise LAPACK dposv_ (décomposition de Cholesky pour matrices symétriques définies positives)
-        let z = solvePositiveDefinite(A: A, b: b)
-        
-        return z
-    }
-    
-    /// Résout un système linéaire avec matrice symétrique définie positive
-    /// Utilise la décomposition de Cholesky (comme scipy.linalg.solve en Python)
+    /// Résout un système linéaire dense A·x = b par élimination de Gauss avec pivotage partiel.
     ///
-    /// En Python : z = scipy.sparse.linalg.spsolve(A, b)
-    /// Utilise internalement une factorisation de Cholesky pour matrices symétriques
-    private static func solvePositiveDefinite(A: [[Double]], b: [Double]) -> [Double] {
-        let n = A.count
-        
-        // Convertir en format column-major pour LAPACK
-        var aFlat = [Double]()
-        for j in 0..<n {
-            for i in 0..<n {
-                aFlat.append(A[i][j])
-            }
-        }
-        
-        var bCopy = b
-        var nInt = __CLPK_integer(n)
-        var nrhs = __CLPK_integer(1)
-        var lda = __CLPK_integer(n)
-        var ldb = __CLPK_integer(n)
-        var info: __CLPK_integer = 0
-        var uplo: Int8 = 76 // 'L' en ASCII
-        
-        // Décomposition de Cholesky + résolution
-        // DPOSV résout A*X = B où A est symétrique définie positive
-        // Équivalent à scipy.linalg.solve avec assume_a='pos'
-        dposv_(&uplo, &nInt, &nrhs, &aFlat, &lda, &bCopy, &ldb, &info)
-        
-        // Si la matrice n'est pas définie positive, utiliser une méthode de secours
-        if info != 0 {
-            return solveFallback(A: A, b: b)
-        }
-        
-        return bCopy
-    }
-    
-    /// Méthode de secours : résolution par élimination de Gauss avec pivotage partiel
-    /// Utilisée si la décomposition de Cholesky échoue
+    /// Utilisé par `aspls` : la matrice du système `diag(α) · (λ·D^TD) + diag(w)`
+    /// n'est PAS symétrique (α multiplie chaque ligne), donc la décomposition de Cholesky
+    /// (LAPACK `dposv`) n'est pas applicable. Pour n ~ quelques centaines de points,
+    /// Gauss dense reste largement assez rapide.
     private static func solveFallback(A: [[Double]], b: [Double]) -> [Double] {
         let n = A.count
         

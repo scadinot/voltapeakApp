@@ -40,7 +40,7 @@ class VoltapeakViewModel {
             print("   Courant min: \(currents.min() ?? 0) A, max: \(currents.max() ?? 0) A")
             
             // Étape 3 : Lissage Savitzky-Golay EXACT (scipy.signal.savgol_filter)
-            let smoothed = SavitzkyGolaySimple.filter(currents, windowLength: 11, polynomialOrder: 2)
+            let smoothed = SavitzkyGolay.filter(currents, windowLength: 11, polynomialOrder: 2)
             print("🔄 Signal lissé (Savitzky-Golay scipy)")
             print("   Courant lissé min: \(smoothed.min() ?? 0) A, max: \(smoothed.max() ?? 0) A")
             
