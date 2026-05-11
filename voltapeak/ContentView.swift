@@ -112,6 +112,12 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .disabled(viewModel.currentAnalysis == nil)
+
+            Button(action: exportPNG) {
+                Label("Exporter PNG", systemImage: "photo")
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.currentAnalysis == nil)
         }
     }
     
@@ -210,6 +216,36 @@ struct ContentView: View {
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 try? xlsxData.write(to: url)
+            }
+        }
+    }
+
+    @MainActor
+    private func exportPNG() {
+        guard let analysis = viewModel.currentAnalysis else { return }
+
+        let renderer = ImageRenderer(content:
+            VoltammogramChartView(analysis: analysis)
+                .frame(width: 1600, height: 1000)
+        )
+        renderer.scale = 2.0
+
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:])
+        else {
+            viewModel.errorMessage = "Échec du rendu PNG du graphique."
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "voltapeak_export.png"
+
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                try? pngData.write(to: url)
             }
         }
     }
