@@ -132,11 +132,11 @@ class VoltapeakViewModel {
     /// - Returns: Contenu CSV
     func exportToCSV() -> String? {
         guard let analysis = currentAnalysis else { return nil }
-        
+
         var csv = "Potentiel (V),Courant brut (A),Signal lissé (A),Baseline (A),Signal corrigé (A)\n"
-        
+
         let (potentials, rawCurrents) = SWVFileReader.processData(analysis.rawData)
-        
+
         for i in 0..<potentials.count {
             csv += String(format: "%.6f,%.9f,%.9f,%.9f,%.9f\n",
                          potentials[i],
@@ -145,8 +145,18 @@ class VoltapeakViewModel {
                          analysis.baseline[i],
                          analysis.correctedSignal[i])
         }
-        
+
         return csv
+    }
+
+    /// Exporte les résultats au format Excel (.xlsx).
+    /// - Returns: Octets du fichier xlsx prêts à écrire sur disque
+    func exportToXLSX() -> Data? {
+        guard let analysis = currentAnalysis else { return nil }
+        let (potentials, rawCurrents) = SWVFileReader.processData(analysis.rawData)
+        return XLSXWriter.write(analysis: analysis,
+                                potentials: potentials,
+                                rawCurrents: rawCurrents)
     }
     
     /// Réinitialise l'analyse

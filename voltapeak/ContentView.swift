@@ -106,6 +106,12 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .disabled(viewModel.currentAnalysis == nil)
+
+            Button(action: exportXLSX) {
+                Label("Exporter Excel", systemImage: "tablecells")
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.currentAnalysis == nil)
         }
     }
     
@@ -180,14 +186,30 @@ struct ContentView: View {
     
     private func exportCSV() {
         guard let csvContent = viewModel.exportToCSV() else { return }
-        
+
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = "voltapeak_export.csv"
-        
+
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 try? csvContent.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    private func exportXLSX() {
+        guard let xlsxData = viewModel.exportToXLSX() else { return }
+
+        let panel = NSSavePanel()
+        if let xlsxType = UTType(filenameExtension: "xlsx") {
+            panel.allowedContentTypes = [xlsxType]
+        }
+        panel.nameFieldStringValue = "voltapeak_export.xlsx"
+
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                try? xlsxData.write(to: url)
             }
         }
     }
@@ -217,84 +239,9 @@ struct VoltammogramChartView: View {
             .padding(.top)
             
             // Graphique
-            Chart {
-                let (potentials, rawCurrents) = SWVFileReader.processData(analysis.rawData)
-                
-                // Signal brut (transparence)
-                ForEach(Array(zip(potentials, rawCurrents).enumerated()), id: \.offset) { index, data in
-                    LineMark(
-                        x: .value("Potentiel", data.0),
-                        y: .value("Courant", data.1)
-                    )
-                    .foregroundStyle(.gray.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                }
-                .accessibilityLabel("Signal brut")
-                
-                // Signal lissé
-                ForEach(Array(zip(potentials, analysis.smoothedSignal).enumerated()), id: \.offset) { index, data in
-                    LineMark(
-                        x: .value("Potentiel", data.0),
-                        y: .value("Courant", data.1)
-                    )
-                    .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-                .accessibilityLabel("Signal lissé")
-                
-                // Baseline
-                ForEach(Array(zip(potentials, analysis.baseline).enumerated()), id: \.offset) { index, data in
-                    LineMark(
-                        x: .value("Potentiel", data.0),
-                        y: .value("Courant", data.1)
-                    )
-                    .foregroundStyle(.orange)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                }
-                .accessibilityLabel("Baseline estimée")
-                
-                // Signal corrigé
-                ForEach(Array(zip(potentials, analysis.correctedSignal).enumerated()), id: \.offset) { index, data in
-                    LineMark(
-                        x: .value("Potentiel", data.0),
-                        y: .value("Courant", data.1)
-                    )
-                    .foregroundStyle(.green)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                }
-                .accessibilityLabel("Signal corrigé")
-                
-                // Marqueur du pic
-                PointMark(
-                    x: .value("Potentiel", analysis.peakPotential),
-                    y: .value("Courant", analysis.peakCurrent)
-                )
-                .foregroundStyle(.pink)
-                .symbolSize(100)
-                
-                // Ligne verticale au pic
-                RuleMark(x: .value("Pic", analysis.peakPotential))
-                    .foregroundStyle(.pink.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            }
-            .chartXAxis {
-                AxisMarks(position: .bottom) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel()
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel()
-                }
-            }
-            .chartXAxisLabel("Potentiel (V)")
-            .chartYAxisLabel("Courant (A)")
-            .padding()
-            
+            chartView
+                .padding()
+
             // Légende
             legendView
                 .padding(.horizontal)
@@ -302,14 +249,111 @@ struct VoltammogramChartView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
-    
+
+    // Couleurs alignées sur les défauts matplotlib (tab10) pour parité visuelle Python
+    private static let mplBlue   = Color(red: 0.122, green: 0.467, blue: 0.706)  // C0
+    private static let mplOrange = Color(red: 1.000, green: 0.498, blue: 0.055)  // C1
+    private static let mplGreen  = Color(red: 0.173, green: 0.627, blue: 0.173)  // C2
+    private static let mplRed    = Color(red: 0.839, green: 0.153, blue: 0.157)  // C3
+    private static let mplMagenta = Color(red: 1.0, green: 0.0, blue: 1.0)        // 'm'
+
+    private var chartView: some View {
+        // Pré-calcul des potentiels et du domaine
+        let (potentials, rawCurrents) = SWVFileReader.processData(analysis.rawData)
+        let xMin = potentials.min() ?? 0
+        let xMax = potentials.max() ?? 1
+        // Bornes Y : englobe toutes les séries + une petite marge
+        let allY = rawCurrents + analysis.smoothedSignal + analysis.baseline + analysis.correctedSignal
+        let yMin = (allY.min() ?? 0)
+        let yMax = (allY.max() ?? 1)
+        let yPad = (yMax - yMin) * 0.05
+        let pts = Array(zip(potentials, rawCurrents))
+
+        return Chart {
+            // Signal brut (bleu α=0.5) — series: identifie la ligne pour SwiftUI Charts
+            ForEach(pts.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("Potentiel", pts[i].0),
+                    y: .value("Courant", pts[i].1),
+                    series: .value("Série", "brut")
+                )
+                .foregroundStyle(Self.mplBlue.opacity(0.5))
+                .lineStyle(StrokeStyle(lineWidth: 0.8))
+            }
+
+            // Signal lissé (orange)
+            ForEach(potentials.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("Potentiel", potentials[i]),
+                    y: .value("Courant", analysis.smoothedSignal[i]),
+                    series: .value("Série", "lissé")
+                )
+                .foregroundStyle(Self.mplOrange)
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+            }
+
+            // Baseline (vert dashed)
+            ForEach(potentials.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("Potentiel", potentials[i]),
+                    y: .value("Courant", analysis.baseline[i]),
+                    series: .value("Série", "baseline")
+                )
+                .foregroundStyle(Self.mplGreen)
+                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            }
+
+            // Signal corrigé (rouge)
+            ForEach(potentials.indices, id: \.self) { i in
+                LineMark(
+                    x: .value("Potentiel", potentials[i]),
+                    y: .value("Courant", analysis.correctedSignal[i]),
+                    series: .value("Série", "corrigé")
+                )
+                .foregroundStyle(Self.mplRed)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+            }
+
+            // Ligne verticale au pic (magenta pointillée)
+            RuleMark(x: .value("Pic", analysis.peakPotential))
+                .foregroundStyle(Self.mplMagenta.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+
+            // Marqueur du pic (magenta)
+            PointMark(
+                x: .value("Potentiel", analysis.peakPotential),
+                y: .value("Courant", analysis.peakCurrent)
+            )
+            .foregroundStyle(Self.mplMagenta)
+            .symbolSize(80)
+        }
+        .chartXScale(domain: xMin...xMax)
+        .chartYScale(domain: (yMin - yPad)...(yMax + yPad))
+        .chartXAxis {
+            AxisMarks(position: .bottom) { _ in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel()
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { _ in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel()
+            }
+        }
+        .chartXAxisLabel("Potentiel (V)")
+        .chartYAxisLabel("Courant (A)")
+    }
+
     private var legendView: some View {
         HStack(spacing: 20) {
-            LegendItem(color: .gray.opacity(0.5), label: "Signal brut")
-            LegendItem(color: .blue, label: "Signal lissé")
-            LegendItem(color: .orange, label: "Baseline estimée", dashed: true)
-            LegendItem(color: .green, label: "Signal corrigé")
-            LegendItem(color: .pink, label: "Pic corrigé", isPoint: true)
+            LegendItem(color: Self.mplBlue.opacity(0.5), label: "Signal brut")
+            LegendItem(color: Self.mplOrange, label: "Signal lissé")
+            LegendItem(color: Self.mplGreen, label: "Baseline estimée (asPLS)", dashed: true)
+            LegendItem(color: Self.mplRed, label: "Signal corrigé")
+            LegendItem(color: Self.mplMagenta, label: "Pic corrigé", isPoint: true)
         }
         .font(.caption)
     }
