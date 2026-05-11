@@ -35,5 +35,4 @@ jobs:
           xcodebuild clean build analyze -scheme "$scheme" -"$filetype_parameter" "$file_to_build" | xcpretty
       - name: Test
         run: |
-          set -o pipefail
-          xcodebuild test -scheme "$scheme" -"$filetype_parameter" "$file_to_build" -destination 'platform=macOS' -configuration Debug | xcpretty
+          xcodebuild test -scheme "$scheme" -"$filetype_parameter" "$file_to_build" -destination 'platform=macOS' -configuration Debug
