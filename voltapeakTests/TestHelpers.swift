@@ -34,8 +34,8 @@ func expectArrayApproxEqual(
     guard actual.count == expected.count else { return }
     for i in 0..<actual.count {
         let diff = abs(actual[i] - expected[i])
-        #expect(diff < accuracy,
-                "index \(i): \(actual[i]) vs \(expected[i]) (diff=\(diff) >= \(accuracy))",
+        #expect(diff <= accuracy,
+                "index \(i): \(actual[i]) vs \(expected[i]) (diff=\(diff) > \(accuracy))",
                 sourceLocation: sourceLocation)
     }
 }
