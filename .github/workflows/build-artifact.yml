@@ -1,0 +1,45 @@
+name: Build macOS App Artifact
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Archive unsigned .app and upload as artifact
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect scheme
+        run: |
+          default=$(xcodebuild -list -json | ruby -e "require 'json'; puts JSON.parse(STDIN.read)['project']['schemes'][0]")
+          echo "scheme=$default" >> "$GITHUB_ENV"
+          echo "Using scheme: $default"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project voltapeak.xcodeproj \
+            -scheme "$scheme" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/voltapeak.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual | xcpretty
+          exit ${PIPESTATUS[0]}
+
+      - name: Package .app into zip
+        run: |
+          cd build/voltapeak.xcarchive/Products/Applications
+          zip -r "${GITHUB_WORKSPACE}/build/${scheme}.zip" "${scheme}.app"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.scheme }}-unsigned-${{ github.sha }}
+          path: build/${{ env.scheme }}.zip
+          if-no-files-found: error
