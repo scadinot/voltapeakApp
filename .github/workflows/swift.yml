@@ -1,4 +1,4 @@
-name: Xcode - Build and Analyze
+name: Xcode - Build, Test and Analyze
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build and analyse default scheme using xcodebuild command
+    name: Build, test and analyse default scheme using xcodebuild command
     runs-on: macos-latest
 
     steps:
@@ -29,4 +29,4 @@ jobs:
             file_to_build=$(ls -A | grep -i '\.xcodeproj$')
           fi
           file_to_build=$(echo "$file_to_build" | awk '{$1=$1;print}')
-          xcodebuild clean build analyze -scheme "$scheme" -"$filetype_parameter" "$file_to_build" | xcpretty && exit ${PIPESTATUS[0]}
+          xcodebuild clean build test analyze -scheme "$scheme" -"$filetype_parameter" "$file_to_build" -destination 'platform=macOS' | xcpretty && exit ${PIPESTATUS[0]}
