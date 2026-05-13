@@ -34,16 +34,51 @@ Pour les versions distribuables, vérifier également `Info.plist` :
 
 ## Option 0 — CI GitHub Actions
 
-**Non configurée pour `voltapeakApp`.** Cette app est mono-fichier
-SwiftUI, distribuée à la main pour le moment. Pour un exemple de
-workflow GitHub Actions (`build-artifact.yml` + `release.yml`), voir
-[`voltapeak_loopsApp/.github/workflows/`](https://github.com/scadinot/voltapeak_loopsApp/tree/main/.github/workflows).
-Le squelette est facilement adaptable :
+Trois workflows committés à `.github/workflows/` :
 
-- macOS runner `macos-26` (ou `macos-latest`).
-- `xcodebuild archive ... CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual`.
-- `ditto -c -k --keepParent` pour empaqueter en zip.
-- Upload artifact + création release sur tag `v*`.
+### `swift.yml`
+
+Déclenché à chaque push sur `main` et sur chaque pull request, runner
+`macos-26` :
+
+1. Détecte automatiquement le scheme via
+   `xcodebuild -list -json`.
+2. `xcodebuild clean build analyze` (build + analyseur statique).
+3. `xcodebuild test … -destination 'platform=macOS' -configuration Debug`
+   → exécute la cible `voltapeakTests` (cf.
+   [DEVELOPMENT.md § Tests](DEVELOPMENT.md#tests)).
+
+Sert de garde-fou de non-régression pour les algorithmes scientifiques.
+
+### `build-artifact.yml`
+
+Déclenché à chaque push sur `main` (ou manuellement via
+`workflow_dispatch`) :
+
+1. Archive l'app avec signature ad-hoc
+   (`CODE_SIGN_IDENTITY="-"`).
+2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur le
+   scheme et le SHA du commit).
+
+Utile pour télécharger une build prête à tester sans installer Xcode.
+
+### `release.yml`
+
+Déclenché par un push de tag (`v*` ou `[0-9]*`) :
+
+1. Archive l'app.
+2. Empaquette via `ditto -c -k --keepParent` en `voltapeak-<TAG>.zip`.
+3. Crée (ou met à jour avec `--clobber`) la release GitHub correspondante,
+   asset attaché, notes auto-générées.
+
+```bash
+# Publier une release v1.0.0
+git tag -a v1.0.0 -m "first stable release"
+git push origin v1.0.0
+```
+
+Les workflows sont alignés avec ceux de
+[`voltapeak_loopsApp/.github/workflows/`](https://github.com/scadinot/voltapeak_loopsApp/tree/main/.github/workflows).
 
 ---
 
