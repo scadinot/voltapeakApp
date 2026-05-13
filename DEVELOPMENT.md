@@ -65,10 +65,17 @@ voltapeak/
 ├── DISTRIBUTION.md
 ├── CHANGELOG.md
 ├── .gitignore
+├── .github/
+│   └── workflows/      # CI GitHub Actions (swift.yml + build-artifact.yml + release.yml)
 ├── voltapeak.xcodeproj/ # projet Xcode
-└── voltapeak/           # sources Swift + assets
-    ├── *.swift          # 9 fichiers core
-    └── Assets.xcassets/ # AppIcon + AccentColor
+├── voltapeak/           # sources Swift + assets
+│   ├── *.swift          # 9 fichiers core
+│   └── Assets.xcassets/ # AppIcon + AccentColor
+└── voltapeakTests/      # cible Swift Testing
+    ├── SavitzkyGolayTests.swift
+    ├── SignalProcessingTests.swift
+    ├── WhittakerASPLSTests.swift
+    └── TestHelpers.swift
 ```
 
 ## Conventions de code
@@ -139,14 +146,16 @@ la référence Python (cf. [VALIDATION.md](VALIDATION.md)), puis propagée :
 1. Modifier `SavitzkyGolay.swift`, `WhittakerASPLS.swift`,
    `SignalProcessing.swift`, `SWVFileReader.swift` ou
    `VoltammetryData.swift` selon le besoin.
-2. Re-vérifier la parité Python via les snippets de debug
+2. Lancer la cible `voltapeakTests` (`⌘U`) pour vérifier que les tests
+   automatisés passent toujours.
+3. Re-vérifier la parité Python via les snippets de debug
    (cf. [VALIDATION.md](VALIDATION.md) § « Comment reproduire »).
-3. Propager le fichier modifié tel quel vers
+4. Propager le fichier modifié tel quel vers
    [`voltapeak_batchApp/voltapeak_batch/`](https://github.com/scadinot/voltapeak_batchApp)
    et
    [`voltapeak_loopsApp/voltapeak_loops/`](https://github.com/scadinot/voltapeak_loopsApp)
    (la version `loops` ajoute uniquement `Sendable`).
-4. Ajouter une entrée dans [CHANGELOG.md](CHANGELOG.md) de chaque repo.
+5. Ajouter une entrée dans [CHANGELOG.md](CHANGELOG.md) de chaque repo.
 
 ## Débugger
 
@@ -196,25 +205,45 @@ Format précis avec `String(format: "%.6e", v)` pour la comparaison Python.
 
 ## Tests
 
-**État actuel** : aucun test unitaire automatisé. La validation a été
-faite manuellement via la méthodologie compare-and-fix (voir
-[VALIDATION.md](VALIDATION.md)).
+Le projet inclut une cible **`voltapeakTests/`** utilisant le framework
+**Swift Testing** (`import Testing`, `@Suite`, `@Test`) avec 4 fichiers :
 
-**Dette technique consciente.** Pistes pour ajouter des tests :
+| Fichier | Couverture |
+|---|---|
+| `SavitzkyGolayTests.swift` | Coefficients centraux (somme = 1), coefficients de bord mode `'interp'`, équivalence scipy sur cas analytiques |
+| `SignalProcessingTests.swift` | Gradient numpy 2ᵉ ordre non-uniforme, détection de pic (margin, slope filter, argmax) |
+| `WhittakerASPLSTests.swift` | Convergence asPLS sur signal synthétique, paramètres alignés Python (λ, k, tol, maxIter), zone d'exclusion |
+| `TestHelpers.swift` | Utilitaires partagés (chargement de fixtures, tolérances numériques) |
 
-1. **Tests unitaires algorithmiques** (priorité haute) :
-   - Vérifier la somme des coefficients SG (= 1.0).
-   - Vérifier la convergence asPLS sur un signal synthétique (gaussienne
-     + bruit + dérive linéaire).
-   - Vérifier le gradient numpy sur un cas analytique.
-2. **Tests d'intégration** :
-   - Charger un fichier de test fixe → vérifier que le pic final est
-     `−0.273 V ± ε, 6.932 mA ± ε`.
-3. **Tests UI** : moins prioritaires car SwiftUI Charts a son propre
-   rendu.
+Ces tests complètent la validation manuelle bit-exact contre Python
+documentée dans [VALIDATION.md](VALIDATION.md) : ils servent de filet de
+sécurité automatisé pour les régressions.
 
-Pour démarrer : créer une cible `voltapeakTests` dans Xcode, framework
-XCTest.
+### Lancer les tests
+
+```bash
+# Depuis Xcode
+# ⌘U lance la cible voltapeakTests
+
+# Depuis la ligne de commande
+xcodebuild test \
+  -project voltapeak.xcodeproj \
+  -scheme voltapeak \
+  -destination 'platform=macOS'
+```
+
+La CI (`.github/workflows/swift.yml`, runner `macos-26`) exécute
+`xcodebuild build analyze` + `xcodebuild test` à chaque push sur `main`
+et sur chaque pull request.
+
+### Pistes d'extension
+
+- Tests d'intégration end-to-end : charger un fichier de test fixe →
+  vérifier que le pic final est `−0.273 V ± ε, 6.932 mA ± ε`.
+- Tests UI SwiftUI Charts (priorité faible — le rendu est déjà validé
+  visuellement).
+- Étendre la couverture côté `voltapeak_batchApp` et `voltapeak_loopsApp`
+  qui réutilisent les mêmes fonctions sans cible de tests pour l'instant.
 
 ## Limitations connues
 
@@ -232,6 +261,7 @@ XCTest.
 
 - [Apple SwiftUI documentation](https://developer.apple.com/documentation/swiftui)
 - [Apple Charts framework](https://developer.apple.com/documentation/charts)
+- [Swift Testing framework](https://developer.apple.com/documentation/testing)
 - [scipy.signal documentation](https://docs.scipy.org/doc/scipy/reference/signal.html)
 - [pybaselines repo](https://github.com/derb12/pybaselines)
 - [Zhang et al. 2020 paper (asPLS)](https://www.tandfonline.com/doi/full/10.1080/00387010.2020.1734588)
