@@ -1,6 +1,12 @@
 # Distribution
 
-Ce guide explique comment produire une version distribuable de Voltapeak (`.app`, `.dmg`) avec deux options : distribution interne (signature locale) ou publique (notarisation Apple).
+Ce guide explique comment produire une version distribuable de
+`voltapeakApp` (`.app`, `.zip`, `.dmg`). Trois options selon le
+contexte : **CI automatisée**, **signature locale ad-hoc**, ou
+**notarisation Apple**. Le canevas est identique entre les trois apps
+de la famille `voltapeak*` ; voir
+[`voltapeak_batchApp/DISTRIBUTION.md`](https://github.com/scadinot/voltapeak_batchApp/blob/main/DISTRIBUTION.md) et
+[`voltapeak_loopsApp/DISTRIBUTION.md`](https://github.com/scadinot/voltapeak_loopsApp/blob/main/DISTRIBUTION.md).
 
 ## Prérequis communs
 
@@ -26,16 +32,75 @@ Pour les versions distribuables, vérifier également `Info.plist` :
 
 ---
 
-## Option 1 — Distribution interne (sans notarisation)
+## Option 0 — CI GitHub Actions
 
-Pour usage personnel, prototype, ou diffusion au sein d'une équipe restreinte.
+Trois workflows committés à `.github/workflows/` :
+
+### `swift.yml`
+
+Déclenché à chaque push sur `main` et sur chaque pull request, runner
+`macos-26` :
+
+1. Détecte automatiquement le scheme via
+   `xcodebuild -list -json`.
+2. `xcodebuild clean build analyze` (build + analyseur statique).
+3. `xcodebuild test … -destination 'platform=macOS' -configuration Debug`
+   → exécute la cible `voltapeakTests` (cf.
+   [DEVELOPMENT.md § Tests](DEVELOPMENT.md#tests)).
+
+Sert de garde-fou de non-régression pour les algorithmes scientifiques.
+
+### `build-artifact.yml`
+
+Déclenché à chaque push sur `main` (ou manuellement via
+`workflow_dispatch`) :
+
+1. Archive l'app avec signature ad-hoc
+   (`CODE_SIGN_IDENTITY="-"`).
+2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur le
+   scheme et le SHA du commit).
+
+Utile pour télécharger une build prête à tester sans installer Xcode.
+
+### `release.yml`
+
+Déclenché par un push de tag (`v*` ou `[0-9]*`) :
+
+1. Archive l'app.
+2. Empaquette via `ditto -c -k --keepParent` en `voltapeak-<TAG>.zip`.
+3. Crée (ou met à jour avec `--clobber`) la release GitHub correspondante,
+   asset attaché, notes auto-générées.
+
+```bash
+# Publier une release v1.0.0
+git tag -a v1.0.0 -m "first stable release"
+git push origin v1.0.0
+```
+
+Les workflows sont alignés avec ceux de
+[`voltapeak_loopsApp/.github/workflows/`](https://github.com/scadinot/voltapeak_loopsApp/tree/main/.github/workflows).
+
+---
+
+## Option 1 — Distribution locale ad-hoc (sans notarisation)
+
+Pour usage personnel, prototype, ou diffusion au sein d'une équipe
+restreinte.
 
 ### Étapes
 
-1. **Archive** : `Product → Destination → Any Mac` puis `Product → Archive`
-2. **Export** dans Organizer : `Distribute App → Copy App → Next → choisir un dossier`
+1. **Archive** : `Product → Destination → Any Mac` puis `Product →
+   Archive`
+2. **Export** dans Organizer : `Distribute App → Copy App → Next →
+   choisir un dossier`
 
 Résultat : un fichier `voltapeak.app`.
+
+### Créer un ZIP
+
+```bash
+ditto -c -k --keepParent voltapeak.app voltapeak.zip
+```
 
 ### Créer un DMG
 
@@ -48,7 +113,8 @@ hdiutil create -volname "Voltapeak" \
                Voltapeak-1.0.dmg
 ```
 
-**Option scriptée** (le projet inclut `voltapeak.xcodeproj/create_dmg.sh`) :
+**Option scriptée** (le projet inclut
+`voltapeak.xcodeproj/create_dmg.sh`) :
 
 ```bash
 ./voltapeak.xcodeproj/create_dmg.sh ./voltapeak.app
@@ -58,19 +124,23 @@ hdiutil create -volname "Voltapeak" \
 
 Sans notarisation, macOS affiche au premier lancement :
 
-> *« voltapeak ne peut pas être ouvert car il provient d'un développeur non identifié »*
+> *« voltapeak ne peut pas être ouvert car il provient d'un développeur
+> non identifié »*
 
-L'utilisateur doit alors **clic droit → Ouvrir** puis confirmer dans la boîte de dialogue. Les lancements suivants sont normaux.
+L'utilisateur doit alors **clic droit → Ouvrir** puis confirmer dans la
+boîte de dialogue. Les lancements suivants sont normaux.
 
 ---
 
 ## Option 2 — Distribution publique (avec notarisation Apple)
 
-Pour diffusion large (site web, GitHub Releases, etc.) sans warning au lancement.
+Pour diffusion large (site web, GitHub Releases, etc.) sans warning au
+lancement.
 
 ### Prérequis additionnels
 
 - Compte **Apple Developer Program** actif (99 €/an)
+- Certificat **Developer ID Application** installé dans le Keychain
 - Hardened Runtime activé dans Signing & Capabilities :
   ```
   ✅ Hardened Runtime
@@ -78,11 +148,12 @@ Pour diffusion large (site web, GitHub Releases, etc.) sans warning au lancement
 
 ### Étapes
 
-1. **Archive** : `Product → Archive` (comme option 1)
+1. **Archive** : `Product → Archive` (comme option 1).
 2. **Distribute App** dans Organizer :
-   - Choisir **"Developer ID"** (pas "Copy App")
-   - **Upload** pour notarisation (option par défaut)
-   - Apple va signer + scanner + notariser (quelques minutes à quelques heures)
+   - Choisir **« Developer ID »** (pas « Copy App »).
+   - **Upload** pour notarisation (option par défaut).
+   - Apple va signer + scanner + notariser (quelques minutes à quelques
+     heures).
 3. **Vérifier** :
    ```bash
    xcrun notarytool history --apple-id <votre@email.com>
@@ -98,7 +169,8 @@ Pour diffusion large (site web, GitHub Releases, etc.) sans warning au lancement
    xcrun stapler staple Voltapeak-1.0.dmg
    ```
 
-Résultat : `Voltapeak-1.0.dmg` notarisé, lancé sans warning sur n'importe quel Mac.
+Résultat : `Voltapeak-1.0.dmg` notarisé, lancé sans warning sur
+n'importe quel Mac.
 
 ---
 
@@ -132,9 +204,9 @@ spctl -a -vv -t install voltapeak.app
 
 | Fichier | Taille |
 |---|---|
-| `voltapeak.app` (bundle) | ~5-10 Mo |
-| `voltapeak.dmg` (compressé UDZO) | ~3-7 Mo |
-| `voltapeak.zip` | ~3-7 Mo |
+| `voltapeak.app` (bundle) | ≈ 5-10 Mo |
+| `voltapeak.dmg` (UDZO) | ≈ 3-7 Mo |
+| `voltapeak.zip` | ≈ 3-7 Mo |
 
 ---
 

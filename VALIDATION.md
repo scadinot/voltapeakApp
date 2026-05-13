@@ -1,13 +1,26 @@
 # Validation numérique
 
-Ce document décrit la méthodologie utilisée pour valider que le port Swift reproduit la référence Python à la 6ᵉ décimale, et résume les bugs identifiés/corrigés au cours du processus.
+Ce document est la **référence canonique de validation** de la famille
+`voltapeak*` : il décrit la méthodologie utilisée pour vérifier que le
+port Swift reproduit la référence Python à la 6ᵉ décimale, et résume les
+bugs identifiés/corrigés au cours du processus.
+
+Les apps batch
+[`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) et
+[`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp)
+reprennent les fonctions d'analyse à l'identique ; elles **ne rejouent
+pas** cette validation numérique et documentent uniquement leur
+validation propre (parsing, agrégation, gestion d'erreurs) dans leur
+propre `VALIDATION.md`.
 
 ## Méthodologie : compare-and-fix itératif
 
 Pour chaque méthode du pipeline Python, on a procédé en 5 étapes :
 
-1. **Inventaire** : identifier le mapping Python → Swift (fonction, fichier, ligne)
-2. **Logging** : insérer des snippets `print(...)` aux mêmes points en Python et Swift, **avec un format strictement identique** :
+1. **Inventaire** : identifier le mapping Python → Swift (fonction,
+   fichier, ligne)
+2. **Logging** : insérer des snippets `print(...)` aux mêmes points en
+   Python et Swift, **avec un format strictement identique** :
    ```
    === <method> DEBUG (Python|Swift) ===
    first5    : [...]
@@ -16,11 +29,15 @@ Pour chaque méthode du pipeline Python, on a procédé en 5 étapes :
    <params spécifiques à la méthode>
    ===
    ```
-3. **Exécution** : lancer les deux pipelines sur le même fichier d'entrée (`BT16Mb-T16TAC_04_SWV_C08.txt`, n=85 points)
+3. **Exécution** : lancer les deux pipelines sur le même fichier d'entrée
+   (`BT16Mb-T16TAC_04_SWV_C08.txt`, n=85 points)
 4. **Diff** : comparer visuellement les blocs de logs côte à côte
-5. **Correction** : si divergence, patcher le Swift, supprimer les debug, passer à la méthode suivante. Sinon, supprimer les debug et passer à la suivante.
+5. **Correction** : si divergence, patcher le Swift, supprimer les debug,
+   passer à la méthode suivante. Sinon, supprimer les debug et passer à
+   la suivante.
 
-Le fichier d'entrée contient 85 paires (potentiel, courant) avec un pic anodique attendu autour de −0.273 V.
+Le fichier d'entrée contient 85 paires (potentiel, courant) avec un pic
+anodique attendu autour de −0.273 V.
 
 ## Pipeline validé étape par étape
 
@@ -46,7 +63,8 @@ Le fichier d'entrée contient 85 paires (potentiel, courant) avec un pic anodiqu
 | Baseline max | 6.362728e-03 A | 6.362728e-03 A | 0 |
 | Baseline sum | 5.297770e-01 | 5.297770e-01 | 0 |
 
-**Tous les champs sortants** des 5 fonctions numériques matchent à la 6ᵉ décimale entre Python et Swift sur ce fichier de référence.
+**Tous les champs sortants** des 5 fonctions numériques matchent à la
+6ᵉ décimale entre Python et Swift sur ce fichier de référence.
 
 ## 10 bugs corrigés au cours de la validation
 
@@ -88,7 +106,8 @@ Le fichier d'entrée contient 85 paires (potentiel, courant) avec un pic anodiqu
 
 ### Préparer le fichier de test
 
-Le fichier `BT16Mb-T16TAC_04_SWV_C08.txt` doit être chargé dans les deux applications. Format attendu :
+Le fichier `BT16Mb-T16TAC_04_SWV_C08.txt` doit être chargé dans les deux
+applications. Format attendu :
 
 ```
 [Entête potentiostat]
@@ -129,7 +148,8 @@ print("stats  : min=\(...) max=\(...) sum=\(...)")
 
 ### Critère de bit-exact
 
-Tous les champs (`first5`, `last5`, `stats`) doivent matcher à la 6ᵉ décimale. Si l'un diverge :
+Tous les champs (`first5`, `last5`, `stats`) doivent matcher à la 6ᵉ
+décimale. Si l'un diverge :
 - Analyser l'algorithme correspondant
 - Patcher le Swift
 - Relancer
@@ -137,9 +157,19 @@ Tous les champs (`first5`, `last5`, `stats`) doivent matcher à la 6ᵉ décimal
 
 ## État de la validation
 
-✅ **Toutes les méthodes numériques validées bit-exact** sur le fichier de référence.
+✅ **Toutes les méthodes numériques validées bit-exact** sur le fichier
+de référence.
+
+✅ Document **canonique** pour la parité numérique de la famille
+`voltapeak*` : repris par référence (et non rejoué) dans
+[`voltapeak_batchApp/VALIDATION.md`](https://github.com/scadinot/voltapeak_batchApp/blob/main/VALIDATION.md) et
+[`voltapeak_loopsApp/VALIDATION.md`](https://github.com/scadinot/voltapeak_loopsApp/blob/main/VALIDATION.md).
 
 ⚠️ **Limitations connues** :
-- La validation est faite **sur un seul fichier** de référence. D'autres fichiers SWV pourraient révéler des cas particuliers (n très petit/grand, signal très bruité, pic en bord, etc.)
-- Pas de tests unitaires automatisés à ce jour — la validation est manuelle/interactive
-- Précision en virgule flottante : les écarts sub-10⁻⁶ ne sont pas distingués (la `print` debug formate à 6 décimales)
+- La validation est faite **sur un seul fichier** de référence. D'autres
+  fichiers SWV pourraient révéler des cas particuliers (n très
+  petit/grand, signal très bruité, pic en bord, etc.)
+- Pas de tests unitaires automatisés à ce jour — la validation est
+  manuelle/interactive
+- Précision en virgule flottante : les écarts sub-10⁻⁶ ne sont pas
+  distingués (la `print` debug formate à 6 décimales)
