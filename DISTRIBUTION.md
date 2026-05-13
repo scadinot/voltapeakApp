@@ -41,8 +41,7 @@ Trois workflows committés à `.github/workflows/` :
 Déclenché à chaque push sur `main` et sur chaque pull request, runner
 `macos-26` :
 
-1. Détecte automatiquement le scheme via
-   `xcodebuild -list -json`.
+1. Détecte automatiquement le scheme via `xcodebuild -list -json`.
 2. `xcodebuild clean build analyze` (build + analyseur statique).
 3. `xcodebuild test … -destination 'platform=macOS' -configuration Debug`
    → exécute la cible `voltapeakTests` (cf.
@@ -55,10 +54,9 @@ Sert de garde-fou de non-régression pour les algorithmes scientifiques.
 Déclenché à chaque push sur `main` (ou manuellement via
 `workflow_dispatch`) :
 
-1. Archive l'app avec signature ad-hoc
-   (`CODE_SIGN_IDENTITY="-"`).
-2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur le
-   scheme et le SHA du commit).
+1. Archive l'app avec signature ad-hoc (`CODE_SIGN_IDENTITY="-"`).
+2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur
+   le scheme et le SHA du commit).
 
 Utile pour télécharger une build prête à tester sans installer Xcode.
 
@@ -68,17 +66,14 @@ Déclenché par un push de tag (`v*` ou `[0-9]*`) :
 
 1. Archive l'app.
 2. Empaquette via `ditto -c -k --keepParent` en `voltapeak-<TAG>.zip`.
-3. Crée (ou met à jour avec `--clobber`) la release GitHub correspondante,
-   asset attaché, notes auto-générées.
+3. Crée (ou met à jour avec `--clobber`) la release GitHub
+   correspondante, asset attaché, notes auto-générées.
 
 ```bash
 # Publier une release v1.0.0
 git tag -a v1.0.0 -m "first stable release"
 git push origin v1.0.0
 ```
-
-Les workflows sont alignés avec ceux de
-[`voltapeak_loopsApp/.github/workflows/`](https://github.com/scadinot/voltapeak_loopsApp/tree/main/.github/workflows).
 
 ---
 
@@ -90,9 +85,9 @@ restreinte.
 ### Étapes
 
 1. **Archive** : `Product → Destination → Any Mac` puis `Product →
-   Archive`
+   Archive`.
 2. **Export** dans Organizer : `Distribute App → Copy App → Next →
-   choisir un dossier`
+   choisir un dossier`.
 
 Résultat : un fichier `voltapeak.app`.
 
@@ -104,20 +99,11 @@ ditto -c -k --keepParent voltapeak.app voltapeak.zip
 
 ### Créer un DMG
 
-**Option simple, en ligne de commande :**
-
 ```bash
 hdiutil create -volname "Voltapeak" \
                -srcfolder voltapeak.app \
                -ov -format UDZO \
-               Voltapeak-1.0.dmg
-```
-
-**Option scriptée** (le projet inclut
-`voltapeak.xcodeproj/create_dmg.sh`) :
-
-```bash
-./voltapeak.xcodeproj/create_dmg.sh ./voltapeak.app
+               voltapeak-1.0.dmg
 ```
 
 ### Limitation : warning au premier lancement
@@ -139,8 +125,8 @@ lancement.
 
 ### Prérequis additionnels
 
-- Compte **Apple Developer Program** actif (99 €/an)
-- Certificat **Developer ID Application** installé dans le Keychain
+- Compte **Apple Developer Program** actif (99 €/an).
+- Certificat **Developer ID Application** installé dans le Keychain.
 - Hardened Runtime activé dans Signing & Capabilities :
   ```
   ✅ Hardened Runtime
@@ -165,11 +151,11 @@ lancement.
 5. **Créer et agrafer le DMG** :
    ```bash
    hdiutil create -volname "Voltapeak" -srcfolder voltapeak.app \
-                  -ov -format UDZO Voltapeak-1.0.dmg
-   xcrun stapler staple Voltapeak-1.0.dmg
+                  -ov -format UDZO voltapeak-1.0.dmg
+   xcrun stapler staple voltapeak-1.0.dmg
    ```
 
-Résultat : `Voltapeak-1.0.dmg` notarisé, lancé sans warning sur
+Résultat : `voltapeak-1.0.dmg` notarisé, lancé sans warning sur
 n'importe quel Mac.
 
 ---
@@ -214,10 +200,24 @@ spctl -a -vv -t install voltapeak.app
 
 | Canal | Pour |
 |---|---|
+| GitHub Releases (via `release.yml`) | Open source, publication officielle |
+| Artifact GitHub Actions (via `build-artifact.yml`) | Smoke-test interne, builds intermédiaires |
 | Email | < 25 Mo, audience restreinte |
 | iCloud Drive / Dropbox | Diffusion interne via lien |
-| GitHub Releases | Open source, publication officielle |
 | Site web personnel | Distribution publique |
+
+---
+
+## Versioning
+
+- `MARKETING_VERSION` (version publique, ex. `1.0.0`) : modifiée dans
+  `project.pbxproj`.
+- `CURRENT_PROJECT_VERSION` (build number, ex. `1`) : incrémentée à
+  chaque release.
+- Mise à jour de [CHANGELOG.md](CHANGELOG.md) à chaque release.
+- Tag git annoté : `git tag -a v1.0.0 -m "Release 1.0.0"` puis
+  `git push origin v1.0.0` ; le workflow `release.yml` se déclenche
+  automatiquement.
 
 ---
 
