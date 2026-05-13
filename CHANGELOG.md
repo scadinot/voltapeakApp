@@ -108,7 +108,7 @@ bugs identifiés et corrigés. Les plus significatifs :
 ### Compatibilité
 
 - macOS 14.0+ (Sonoma) requis (`Charts` framework + macro `@Observable`).
-- Universal binary (Intel + Apple Silicon).
+- Architectures : Universal (Intel x86_64 + Apple Silicon arm64).
 - App Sandbox activé (`user-selected.read-only`).
 
 ### Notes de validation
@@ -126,10 +126,14 @@ l'identique et héritent de cette validation par construction.
 Algorithmes — portages directs des bibliothèques Python de référence :
 
 - **scipy** (`scipy.signal.savgol_filter`) — lissage Savitzky-Golay.
-- **pybaselines** (`pybaselines.whittaker.aspls`) — baseline asPLS Zhang
-  2020.
+- **pybaselines** (`pybaselines.whittaker.aspls`) — baseline asPLS Zhang 2020.
 - **numpy** (`np.gradient`) — gradient 2ᵉ ordre non-uniforme.
 - **matplotlib** — palette **tab10** pour parité visuelle.
+
+Lignée famille `voltapeak*` :
+
+- [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) — variante batch multi-électrodes consommant ces fonctions sans modification.
+- [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp) — variante batch loops/dosage hiérarchique consommant ces fonctions sans modification.
 
 ---
 
