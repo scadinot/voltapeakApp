@@ -9,8 +9,8 @@ Ce document est la **référence canonique** pour la chaîne d'analyse SWV. Les
 applications batch
 [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) et
 [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp)
-reprennent ce pipeline à l'identique (sections 1-7) et y ajoutent une
-orchestration multi-fichiers (sections 8+).
+reprennent ce pipeline à l'identique et y ajoutent une orchestration
+multi-fichiers, documentée dans leurs propres `ALGORITHMS.md` (sections 8+).
 
 ## 1. Lecture du fichier SWV
 
@@ -93,10 +93,12 @@ by Simplified Least Squares Procedures*. **Analytical Chemistry**, 36(8),
 La recherche du pic se fait uniquement dans `signal[margin ..< n-margin]`. Cela
 évite de détecter les artefacts de démarrage/arrêt du potentiostat.
 
-### Étape 2 : filtre de pente
+### Étape 2 : filtre de pente (optionnel)
 
-Si `maxSlope` est fourni (500 par défaut), on calcule le gradient numérique et
-on ne garde comme candidats que les indices où `|gradient| < maxSlope`.
+`maxSlope` est de type `Double?` ; le pipeline le fixe à `500` par défaut,
+mais passer `nil` désactive entièrement cette étape (cas couvert par les
+tests). Quand il est fourni, on calcule le gradient numérique et on ne garde
+comme candidats que les indices où `|gradient| < maxSlope`.
 
 ### Gradient numpy 2ᵉ ordre non-uniforme
 
@@ -163,8 +165,9 @@ reproduit exactement `pybaselines` qui multiplie le penalty banded par alpha
 par broadcast. Le solveur Swift utilise une élimination de Gauss avec
 pivotage partiel (`solveFallback`), pas une décomposition de Cholesky.
 
-`D^T·D` est pentadiagonal (différences d'ordre 2) et construit directement
-par `WhittakerASPLS.buildDTD(n:diffOrder:)`.
+`D^T·D` est pentadiagonal (différences d'ordre 2) ; il est construit
+directement par un helper interne (`buildDTD(n:diffOrder:)` dans
+`WhittakerASPLS`, non exposé publiquement).
 
 ### Mise à jour itérative
 
