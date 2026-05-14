@@ -89,7 +89,7 @@ voltapeak/
 | Organisation interne | Sections `// MARK: - Section` pour la navigation Xcode |
 | Documentation d'API | Triple-slash `///` avec balises `- Parameters`, `- Returns`, `- Throws` |
 | Acronymes scientifiques | Conservés en minuscules : `aspls`, `savgol`, etc. |
-| Actor isolation | Aucune isolation par défaut au niveau target. `VoltapeakViewModel` est `@Observable` ; les mutations d'état observées par l'UI sont remontées via `await MainActor.run`. |
+| Actor isolation | `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` dans le pbxproj. `VoltapeakViewModel` est `@Observable` ; les calculs hors UI s'exécutent via `await MainActor.run` (le pipeline étant ré-entré sur `analyzeFile(at:) async`). |
 
 Les fichiers Swift sont écrits en français pour la cohérence avec l'UI
 et les commentaires existants. C'est un projet francophone assumé.
