@@ -2,15 +2,16 @@
 
 Ce document détaille les algorithmes mathématiques utilisés dans
 `voltapeakApp` et leur correspondance avec la référence Python (`scipy`,
-`numpy`, `pybaselines`). Tous les détails permettent de reproduire le calcul
-à la 6ᵉ décimale.
+`numpy`, `pybaselines`). Tous les détails permettent de reproduire le
+calcul à la 6ᵉ décimale.
 
-Ce document est la **référence canonique** pour la chaîne d'analyse SWV. Les
-applications batch
+Ce document est la **référence canonique** pour la chaîne d'analyse SWV.
+Les applications batch
 [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) et
 [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp)
 reprennent ce pipeline à l'identique et y ajoutent une orchestration
-multi-fichiers, documentée dans leurs propres `ALGORITHMS.md` (sections 8+).
+multi-fichiers, documentée dans leurs propres `ALGORITHMS.md`
+(sections 8+).
 
 ## 1. Lecture du fichier SWV
 
@@ -85,6 +86,11 @@ by Simplified Least Squares Procedures*. **Analytical Chemistry**, 36(8),
 ## 4. Détection de pic
 
 **Implémentation :** `SignalProcessing.detectPeak(signal:potentials:marginRatio:maxSlope:)`
+
+Appliquée deux fois dans le pipeline :
+
+1. sur le signal lissé pour positionner la zone d'exclusion asPLS,
+2. sur le signal corrigé pour la valeur finale retenue.
 
 ### Étape 1 : exclusion des bords
 
@@ -197,7 +203,7 @@ directement par un helper interne (`buildDTD(n:diffOrder:)` dans
 
 | Paramètre | Valeur | Origine |
 |---|---|---|
-| `lam` (lissage) | `1e3 × n²` (≈ 7.225e6 pour n=85) | Mise à l'échelle empirique du Python (voltapeak.py) |
+| `lam` (lissage) | `1e3 × n²` | Mise à l'échelle empirique du Python (voltapeak.py) |
 | `asymmetric_coef` (k) | `0.5` | Défaut pybaselines |
 | `tol` | `1e-2` | Voltapeak Python |
 | `max_iter` | `25` | Voltapeak Python |
@@ -255,15 +261,16 @@ position du pic peut légèrement changer par rapport à la détection brute
 (étape 4) — le signal corrigé étant plus « net » sans la dérive de la
 baseline.
 
-C'est cette deuxième détection qui produit la valeur affichée à l'écran :
-**−0.273 V, 6.932 mA** pour le fichier de référence
-`BT16Mb-T16TAC_04_SWV_C08.txt`.
+C'est cette deuxième détection (potentiel + courant corrigé) qui produit la
+valeur affichée à l'écran : **−0.273 V, 6.932 mA** pour le fichier de
+référence `BT16Mb-T16TAC_04_SWV_C08.txt` (`n = 85` points, ≈ 7.225e6 pour
+`lam`).
 
 ## Pseudocode complet
 
-> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`, `weights`,
-> `max_iter`, `tol`, `k`) par souci de lisibilité ; la signature Swift
-> correspondante est
+> Le pseudocode adopte la nomenclature Python/pybaselines (`lam`,
+> `weights`, `max_iter`, `tol`, `k`) par souci de lisibilité ; la
+> signature Swift correspondante est
 > `WhittakerASPLS.aspls(y:lam:diffOrder:maxIter:tol:weights:alpha:asymmetricCoef:)`
 > (cf. §5, où `k` désigne `asymmetric_coef` / `asymmetricCoef`).
 
@@ -273,7 +280,7 @@ processData → potentials[], signal[]   # tri + inversion signe
 
 smoothed = savgol_filter(signal, 11, 2, mode='interp')
 
-(xPeak, yPeak) = detectPeak(smoothed, potentials, margin=0.10, maxSlope=500)
+(xPeak, _) = detectPeak(smoothed, potentials, margin=0.10, maxSlope=500)
 
 weights = ones(n)
 weights[ potentials ∈ [xPeak ± 0.03·range] ] = 0.001
@@ -284,6 +291,6 @@ corrected = smoothed − baseline
 (xFinal, yFinal) = detectPeak(corrected, potentials, margin=0.10, maxSlope=500)
 ```
 
-Avec `n = 85` points et le fichier de référence, ce pipeline converge en 9
-itérations asPLS et produit un pic à **−0.273 V, 6.932 mA**, bit-exact avec
-la référence Python.
+Sur le fichier de référence, ce pipeline converge en 9 itérations asPLS
+et produit un pic à **−0.273 V, 6.932 mA**, bit-exact avec la référence
+Python.

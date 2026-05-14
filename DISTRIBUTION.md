@@ -15,7 +15,7 @@ Dans Xcode, onglet **Signing & Capabilities** :
 ```
 ✅ Automatically manage signing
 Team               : votre équipe Apple
-Bundle Identifier  : com.<votreNom>.voltapeak  (unique)
+Bundle Identifier  : com.cadinot.voltapeak  (par défaut dans le pbxproj)
 
 App Sandbox        : activé
   ✅ User Selected File (Read Only)
@@ -41,8 +41,7 @@ Trois workflows committés à `.github/workflows/` :
 Déclenché à chaque push sur `main` et sur chaque pull request, runner
 `macos-26` :
 
-1. Détecte automatiquement le scheme via
-   `xcodebuild -list -json`.
+1. Détecte automatiquement le scheme via `xcodebuild -list -json`.
 2. `xcodebuild clean build analyze` (build + analyseur statique).
 3. `xcodebuild test … -destination 'platform=macOS' -configuration Debug`
    → exécute la cible `voltapeakTests` (cf.
@@ -55,10 +54,9 @@ Sert de garde-fou de non-régression pour les algorithmes scientifiques.
 Déclenché à chaque push sur `main` (ou manuellement via
 `workflow_dispatch`) :
 
-1. Archive l'app avec signature ad-hoc
-   (`CODE_SIGN_IDENTITY="-"`).
-2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur le
-   scheme et le SHA du commit).
+1. Archive l'app avec signature ad-hoc (`CODE_SIGN_IDENTITY="-"`).
+2. Upload du `.app` comme artifact GitHub (nom de l'artifact basé sur
+   le scheme et le SHA du commit).
 
 Utile pour télécharger une build prête à tester sans installer Xcode.
 
@@ -68,17 +66,14 @@ Déclenché par un push de tag (`v*` ou `[0-9]*`) :
 
 1. Archive l'app.
 2. Empaquette via `ditto -c -k --keepParent` en `voltapeak-<TAG>.zip`.
-3. Crée (ou met à jour avec `--clobber`) la release GitHub correspondante,
-   asset attaché, notes auto-générées.
+3. Crée (ou met à jour avec `--clobber`) la release GitHub
+   correspondante, asset attaché, notes auto-générées.
 
 ```bash
-# Publier une release v1.0.0
-git tag -a v1.0.0 -m "first stable release"
-git push origin v1.0.0
+# Publier une release v1.0
+git tag -a v1.0 -m "first stable release"
+git push origin v1.0
 ```
-
-Les workflows sont alignés avec ceux de
-[`voltapeak_loopsApp/.github/workflows/`](https://github.com/scadinot/voltapeak_loopsApp/tree/main/.github/workflows).
 
 ---
 
@@ -90,9 +85,9 @@ restreinte.
 ### Étapes
 
 1. **Archive** : `Product → Destination → Any Mac` puis `Product →
-   Archive`
+   Archive`.
 2. **Export** dans Organizer : `Distribute App → Copy App → Next →
-   choisir un dossier`
+   choisir un dossier`.
 
 Résultat : un fichier `voltapeak.app`.
 
@@ -104,20 +99,11 @@ ditto -c -k --keepParent voltapeak.app voltapeak.zip
 
 ### Créer un DMG
 
-**Option simple, en ligne de commande :**
-
 ```bash
 hdiutil create -volname "Voltapeak" \
                -srcfolder voltapeak.app \
                -ov -format UDZO \
-               Voltapeak-1.0.dmg
-```
-
-**Option scriptée** (le projet inclut
-`voltapeak.xcodeproj/create_dmg.sh`) :
-
-```bash
-./voltapeak.xcodeproj/create_dmg.sh ./voltapeak.app
+               voltapeak-1.0.dmg
 ```
 
 ### Limitation : warning au premier lancement
@@ -139,11 +125,18 @@ lancement.
 
 ### Prérequis additionnels
 
-- Compte **Apple Developer Program** actif (99 €/an)
-- Certificat **Developer ID Application** installé dans le Keychain
+- Compte **Apple Developer Program** actif (99 €/an).
+- Certificat **Developer ID Application** installé dans le Keychain.
 - Hardened Runtime activé dans Signing & Capabilities :
   ```
   ✅ Hardened Runtime
+  ```
+- Profil de credentials `notarytool` créé une seule fois :
+  ```bash
+  xcrun notarytool store-credentials AC_PROFILE \
+        --apple-id "<email>" \
+        --team-id "<TEAM_ID>" \
+        --password "<app-specific-password>"
   ```
 
 ### Étapes
@@ -154,22 +147,28 @@ lancement.
    - **Upload** pour notarisation (option par défaut).
    - Apple va signer + scanner + notariser (quelques minutes à quelques
      heures).
-3. **Vérifier** :
+3. **Vérifier l'historique de notarisation** :
    ```bash
-   xcrun notarytool history --apple-id <votre@email.com>
+   xcrun notarytool history --keychain-profile "AC_PROFILE"
    ```
-4. **Agrafer le ticket** :
+4. **Agrafer le ticket** sur le bundle :
    ```bash
    xcrun stapler staple voltapeak.app
    ```
-5. **Créer et agrafer le DMG** :
+5. **Créer, signer, notariser et agrafer le DMG** (le DMG doit être
+   notarisé séparément du `.app`) :
    ```bash
    hdiutil create -volname "Voltapeak" -srcfolder voltapeak.app \
-                  -ov -format UDZO Voltapeak-1.0.dmg
-   xcrun stapler staple Voltapeak-1.0.dmg
+                  -ov -format UDZO voltapeak-1.0.dmg
+   codesign --force --options runtime --timestamp \
+            --sign "Developer ID Application: <Votre nom> (<TEAM_ID>)" \
+            voltapeak-1.0.dmg
+   xcrun notarytool submit voltapeak-1.0.dmg \
+         --keychain-profile "AC_PROFILE" --wait
+   xcrun stapler staple voltapeak-1.0.dmg
    ```
 
-Résultat : `Voltapeak-1.0.dmg` notarisé, lancé sans warning sur
+Résultat : `voltapeak-1.0.dmg` notarisé, lancé sans warning sur
 n'importe quel Mac.
 
 ---
@@ -196,6 +195,7 @@ spctl -a -vv -t install voltapeak.app
 | « voltapeak.app est endommagé » | Attributs de quarantaine après téléchargement | `xattr -cr voltapeak.app` |
 | Warning « développeur non identifié » | App non notarisée | Clic droit → Ouvrir, ou notariser (option 2) |
 | `notarytool` échoue | Compte Developer non actif / mot de passe d'app | Régénérer mot de passe d'app sur appleid.apple.com |
+| `stapler staple` du DMG échoue (« No ticket found ») | DMG non soumis à `notarytool submit` avant agrafage | Soumettre le DMG après l'avoir signé (cf. Option 2 §5) |
 | L'app crashe sur d'autres Macs | Architecture ou macOS minimum incompatible | Vérifier Build Settings : Architectures = Standard, Deployment Target ≤ macOS de la cible |
 
 ---
@@ -214,10 +214,27 @@ spctl -a -vv -t install voltapeak.app
 
 | Canal | Pour |
 |---|---|
+| GitHub Releases (via `release.yml`) | Open source, publication officielle |
+| Artifact GitHub Actions (via `build-artifact.yml`) | Smoke-test interne, builds intermédiaires |
 | Email | < 25 Mo, audience restreinte |
 | iCloud Drive / Dropbox | Diffusion interne via lien |
-| GitHub Releases | Open source, publication officielle |
 | Site web personnel | Distribution publique |
+
+---
+
+## Versioning
+
+- `MARKETING_VERSION` (version publique, ex. `1.0` — valeur actuelle
+  dans `project.pbxproj`) : modifiée à chaque release.
+- `CURRENT_PROJECT_VERSION` (build number, ex. `1`) : incrémentée à
+  chaque release.
+- Mise à jour de [CHANGELOG.md](CHANGELOG.md) à chaque release.
+- Tag git annoté : `git tag -a v1.0 -m "Release 1.0"` puis
+  `git push origin v1.0` ; le workflow `release.yml` se déclenche
+  automatiquement.
+
+Le tag (`v1.0`), `MARKETING_VERSION` (`1.0`) et le
+`CFBundleShortVersionString` de `Info.plist` doivent rester cohérents.
 
 ---
 

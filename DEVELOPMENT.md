@@ -1,14 +1,13 @@
 # Guide développeur
 
-Ce document est le guide développeur de `voltapeakApp`. Pour la
-**méthodologie de validation** (comment vérifier la parité bit-exact avec
-la référence Python), voir [VALIDATION.md](VALIDATION.md). Pour les
-**détails algorithmiques** (Savitzky-Golay, asPLS, etc.), voir
-[ALGORITHMS.md](ALGORITHMS.md).
+Guide à l'attention des contributeurs souhaitant faire évoluer
+`voltapeakApp`. Pour la **méthodologie de validation**, voir
+[VALIDATION.md](VALIDATION.md). Pour les **détails algorithmiques**,
+voir [ALGORITHMS.md](ALGORITHMS.md).
 
 `voltapeakApp` est la **référence canonique** des fonctions d'analyse de
-la famille `voltapeak*` ; toute modification d'algorithme doit être
-propagée ensuite vers
+la famille `voltapeak*` ; toute modification d'algorithme se fait ici en
+premier et est propagée vers
 [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) et
 [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp).
 
@@ -21,8 +20,8 @@ propagée ensuite vers
 | **Python** (uniquement pour validation) | 3.11+ avec `numpy`, `scipy`, `pybaselines`, `pandas`, `matplotlib` |
 
 Toutes les bibliothèques Swift utilisées proviennent du SDK macOS
-(SwiftUI, Charts, Foundation, AppKit, UniformTypeIdentifiers,
-Observation). **Aucun Swift Package Manager.**
+(`SwiftUI`, `Charts`, `Foundation`, `AppKit`, `UniformTypeIdentifiers`,
+`Observation`). **Aucun Swift Package Manager.**
 
 ## Build et lancement
 
@@ -90,9 +89,10 @@ voltapeak/
 | Organisation interne | Sections `// MARK: - Section` pour la navigation Xcode |
 | Documentation d'API | Triple-slash `///` avec balises `- Parameters`, `- Returns`, `- Throws` |
 | Acronymes scientifiques | Conservés en minuscules : `aspls`, `savgol`, etc. |
+| Actor isolation | `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` dans le pbxproj. `VoltapeakViewModel` est `@Observable` ; les calculs hors UI s'exécutent via `await MainActor.run` (le pipeline étant ré-entré sur `analyzeFile(at:) async`). |
 
-Les fichiers Swift sont écrits en français pour la cohérence avec l'UI et
-les commentaires existants. C'est un projet francophone assumé.
+Les fichiers Swift sont écrits en français pour la cohérence avec l'UI
+et les commentaires existants. C'est un projet francophone assumé.
 
 ## Ajouter une fonctionnalité
 
@@ -139,9 +139,10 @@ Pour les rendre configurables dynamiquement :
 
 ## Mise à jour des fonctions d'analyse
 
-`voltapeakApp` est la **source de vérité** des fonctions d'analyse. Toute
-modification numérique se fait ici en premier, validée bit-exact contre
-la référence Python (cf. [VALIDATION.md](VALIDATION.md)), puis propagée :
+`voltapeakApp` est la **source de vérité** des fonctions d'analyse.
+Toute modification numérique se fait ici en premier, validée bit-exact
+contre la référence Python (cf. [VALIDATION.md](VALIDATION.md)), puis
+propagée :
 
 1. Modifier `SavitzkyGolay.swift`, `WhittakerASPLS.swift`,
    `SignalProcessing.swift`, `SWVFileReader.swift` ou
@@ -242,8 +243,25 @@ et sur chaque pull request.
   vérifier que le pic final est `−0.273 V ± ε, 6.932 mA ± ε`.
 - Tests UI SwiftUI Charts (priorité faible — le rendu est déjà validé
   visuellement).
-- Étendre la couverture côté `voltapeak_batchApp` et `voltapeak_loopsApp`
+- Étendre la couverture côté
+  [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp)
+  et
+  [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp)
   qui réutilisent les mêmes fonctions sans cible de tests pour l'instant.
+
+## Profiling
+
+L'asPLS est l'étape la plus coûteuse (élimination de Gauss dense
+O(n³)). Pistes d'optimisation :
+
+- Exploiter la structure pentadiagonale de `D^T·D` via un solveur de
+  bandes (LAPACK `dgbsv`) — gain potentiel ~10× sur n grand.
+- Vectoriser les boucles via `Accelerate` (`vDSP`, `vForce`).
+- Mettre en cache `D^T·D` pour un `n` constant.
+
+Toute optimisation doit être validée bit-exact contre la version
+actuelle sur le jeu de fixtures (cf. [VALIDATION.md](VALIDATION.md))
+avant merge.
 
 ## Limitations connues
 
