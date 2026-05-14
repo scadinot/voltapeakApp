@@ -15,7 +15,7 @@ Dans Xcode, onglet **Signing & Capabilities** :
 ```
 ✅ Automatically manage signing
 Team               : votre équipe Apple
-Bundle Identifier  : com.<votreNom>.voltapeak  (unique)
+Bundle Identifier  : com.cadinot.voltapeak  (par défaut dans le pbxproj)
 
 App Sandbox        : activé
   ✅ User Selected File (Read Only)
@@ -70,9 +70,9 @@ Déclenché par un push de tag (`v*` ou `[0-9]*`) :
    correspondante, asset attaché, notes auto-générées.
 
 ```bash
-# Publier une release v1.0.0
-git tag -a v1.0.0 -m "first stable release"
-git push origin v1.0.0
+# Publier une release v1.0
+git tag -a v1.0 -m "first stable release"
+git push origin v1.0
 ```
 
 ---
@@ -131,6 +131,13 @@ lancement.
   ```
   ✅ Hardened Runtime
   ```
+- Profil de credentials `notarytool` créé une seule fois :
+  ```bash
+  xcrun notarytool store-credentials AC_PROFILE \
+        --apple-id "<email>" \
+        --team-id "<TEAM_ID>" \
+        --password "<app-specific-password>"
+  ```
 
 ### Étapes
 
@@ -140,18 +147,24 @@ lancement.
    - **Upload** pour notarisation (option par défaut).
    - Apple va signer + scanner + notariser (quelques minutes à quelques
      heures).
-3. **Vérifier** :
+3. **Vérifier l'historique de notarisation** :
    ```bash
-   xcrun notarytool history --apple-id <votre@email.com>
+   xcrun notarytool history --keychain-profile "AC_PROFILE"
    ```
-4. **Agrafer le ticket** :
+4. **Agrafer le ticket** sur le bundle :
    ```bash
    xcrun stapler staple voltapeak.app
    ```
-5. **Créer et agrafer le DMG** :
+5. **Créer, signer, notariser et agrafer le DMG** (le DMG doit être
+   notarisé séparément du `.app`) :
    ```bash
    hdiutil create -volname "Voltapeak" -srcfolder voltapeak.app \
                   -ov -format UDZO voltapeak-1.0.dmg
+   codesign --force --options runtime --timestamp \
+            --sign "Developer ID Application: <Votre nom> (<TEAM_ID>)" \
+            voltapeak-1.0.dmg
+   xcrun notarytool submit voltapeak-1.0.dmg \
+         --keychain-profile "AC_PROFILE" --wait
    xcrun stapler staple voltapeak-1.0.dmg
    ```
 
@@ -182,6 +195,7 @@ spctl -a -vv -t install voltapeak.app
 | « voltapeak.app est endommagé » | Attributs de quarantaine après téléchargement | `xattr -cr voltapeak.app` |
 | Warning « développeur non identifié » | App non notarisée | Clic droit → Ouvrir, ou notariser (option 2) |
 | `notarytool` échoue | Compte Developer non actif / mot de passe d'app | Régénérer mot de passe d'app sur appleid.apple.com |
+| `stapler staple` du DMG échoue (« No ticket found ») | DMG non soumis à `notarytool submit` avant agrafage | Soumettre le DMG après l'avoir signé (cf. Option 2 §5) |
 | L'app crashe sur d'autres Macs | Architecture ou macOS minimum incompatible | Vérifier Build Settings : Architectures = Standard, Deployment Target ≤ macOS de la cible |
 
 ---
@@ -210,14 +224,17 @@ spctl -a -vv -t install voltapeak.app
 
 ## Versioning
 
-- `MARKETING_VERSION` (version publique, ex. `1.0.0`) : modifiée dans
-  `project.pbxproj`.
+- `MARKETING_VERSION` (version publique, ex. `1.0` — valeur actuelle
+  dans `project.pbxproj`) : modifiée à chaque release.
 - `CURRENT_PROJECT_VERSION` (build number, ex. `1`) : incrémentée à
   chaque release.
 - Mise à jour de [CHANGELOG.md](CHANGELOG.md) à chaque release.
-- Tag git annoté : `git tag -a v1.0.0 -m "Release 1.0.0"` puis
-  `git push origin v1.0.0` ; le workflow `release.yml` se déclenche
+- Tag git annoté : `git tag -a v1.0 -m "Release 1.0"` puis
+  `git push origin v1.0` ; le workflow `release.yml` se déclenche
   automatiquement.
+
+Le tag (`v1.0`), `MARKETING_VERSION` (`1.0`) et le
+`CFBundleShortVersionString` de `Info.plist` doivent rester cohérents.
 
 ---
 
