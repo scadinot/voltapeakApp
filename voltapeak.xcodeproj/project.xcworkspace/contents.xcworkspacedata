@@ -4,16 +4,4 @@
    <FileRef
       location = "self:">
    </FileRef>
-   <FileRef
-      location = "group:DISTRIBUTION.md">
-   </FileRef>
-   <FileRef
-      location = "group:create_dmg.sh">
-   </FileRef>
-   <FileRef
-      location = "group:AnalysisConfiguration.swift">
-   </FileRef>
-   <FileRef
-      location = "group:ASPLSBaseline.swift">
-   </FileRef>
 </Workspace>
