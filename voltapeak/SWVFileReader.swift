@@ -14,9 +14,10 @@ class SWVFileReader {
         case fileNotFound
         case invalidFormat
         case insufficientData
+        case tooManyPoints(Int, limit: Int)
         case permissionDenied
         case encodingError
-        
+
         var errorDescription: String? {
             switch self {
             case .fileNotFound:
@@ -25,6 +26,8 @@ class SWVFileReader {
                 return "Format de fichier invalide. Vérifiez que c'est un fichier texte avec deux colonnes (Potentiel, Courant)."
             case .insufficientData:
                 return "Données insuffisantes (moins de 5 points). Le fichier doit contenir au moins 5 lignes de données."
+            case .tooManyPoints(let n, let limit):
+                return "Trop de points : \(n) > \(limit). Le fichier dépasse le garde-fou de sécurité de l'analyseur asPLS ; vérifiez l'acquisition côté instrument ou le parsing."
             case .permissionDenied:
                 return "Permissions insuffisantes pour accéder au fichier. Vérifiez les paramètres App Sandbox dans Xcode."
             case .encodingError:
