@@ -72,7 +72,11 @@ enum WhittakerASPLS {
         asymmetricCoef: Double = 0.5
     ) -> [Double] {
         let n = y.count
-        precondition(
+        // Garde-fou debug-only. Le caller (`VoltapeakViewModel.analyzeFile`) est
+        // responsable du filtre amont qui remonte une `FileError.tooManyPoints`
+        // à l'UI. En Release, on laisse passer si jamais un chemin oublie le check :
+        // le solveur banded reste tractable bien au-delà de `maxN`.
+        assert(
             n <= maxN,
             "WhittakerASPLS.aspls: signal trop grand (\(n) > \(maxN)). Le caller doit filtrer en amont."
         )
@@ -135,7 +139,15 @@ enum WhittakerASPLS {
                     )
                 }
             }
-            precondition(info == 0, "dgbsv_ a échoué : info=\(info)")
+            // info<0 = bug d'appel (argument invalide à la position -info).
+            // info>0 = matrice singulière à la ligne `info` (NaN/Inf dans y, ou
+            // poids/α extrêmes). Fail-fast avec message diagnostique.
+            if info < 0 {
+                fatalError("dgbsv_ : argument invalide à la position \(-info) (bug d'appel interne).")
+            }
+            if info > 0 {
+                fatalError("dgbsv_ : matrice singulière à la ligne \(info) — vérifiez NaN/Inf dans y, ou poids/α extrêmes.")
+            }
             baseline = b
 
             // Résidus
