@@ -6,8 +6,14 @@
 //  Basée sur le code source Python original :
 //  https://github.com/derb12/pybaselines/blob/main/pybaselines/whittaker.py
 //
+//  Solveur banded LAPACK `dgbsv_` via Accelerate.framework : la matrice
+//  `diag(α)·(λ·D^TD) + diag(w)` est pentadiagonale (KL=KU=2), résolue en
+//  O(n) au lieu d'un Gauss dense O(n³). Aligné sur la référence canonique
+//  scadinot/voltapeak_batchApp.
+//
 
 import Foundation
+import Accelerate
 
 /// Implémentation EXACTE de pybaselines.whittaker.aspls (Zhang 2020)
 ///
@@ -39,6 +45,11 @@ import Foundation
 /// ```
 enum WhittakerASPLS {
 
+    /// Garde-fou : au-delà de cette taille, le caller DOIT refuser le fichier
+    /// en amont. L'algorithme banded reste correct à toute taille, mais on
+    /// bloque par sécurité contre les fichiers corrompus ou mal parsés.
+    static let maxN: Int = 200_000
+
     /// Calcule la baseline par algorithme asPLS exact (pybaselines.whittaker.aspls)
     /// - Parameters:
     ///   - y: Signal d'entrée
@@ -61,39 +72,71 @@ enum WhittakerASPLS {
         asymmetricCoef: Double = 0.5
     ) -> [Double] {
         let n = y.count
+        precondition(
+            n <= maxN,
+            "WhittakerASPLS.aspls: signal trop grand (\(n) > \(maxN)). Le caller doit filtrer en amont."
+        )
+
         var w = weights ?? [Double](repeating: 1.0, count: n)
         var a = alpha ?? [Double](repeating: 1.0, count: n)
 
-        // DTD = D^T @ D où D est la matrice de différences d'ordre `diffOrder`
-        let DTD = buildDTD(n: n, diffOrder: diffOrder)
+        // Format LAPACK band column-major : KL=KU=2, LDAB = 2·KL+KU+1 = 7.
+        // A[i,j] est stocké à AB[(KL+KU+i-j) + j*LDAB] pour |i-j| ≤ 2.
+        // Les KL premières lignes sont réservées au fill-in du pivotage LU.
+        let kl = 2
+        let ku = 2
+        let ldab = 2 * kl + ku + 1   // 7
+
+        // Template DTD banded, indépendant de α et w : calculé une seule fois.
+        let dtdBandedTemplate = buildDTDBanded(n: n, diffOrder: diffOrder, kl: kl, ku: ku, ldab: ldab)
 
         var baseline = [Double](repeating: 0.0, count: n)
-        var iterationsDone = 0
 
         // pybaselines fait range(max_iter + 1) — donc maxIter + 1 itérations possibles
-        for iteration in 0...maxIter {
-            iterationsDone = iteration + 1
-
-            // Construit lhs = diag(a) · (λ · DTD), puis ajoute w sur la diagonale
-            // lhs[i][j] = λ · DTD[i][j] · a[i]   (a multiplie LIGNE i)
-            //          + (w[i] si i==j sinon 0)
-            var A = [[Double]](repeating: [Double](repeating: 0.0, count: n), count: n)
-            for i in 0..<n {
-                let scale = lam * a[i]
-                for j in 0..<n {
-                    A[i][j] = scale * DTD[i][j]
+        for _ in 0...maxIter {
+            // ab = diag(α) · (λ · DTD), puis + diag(w) sur la diagonale.
+            // α multiplie chaque LIGNE i (système non symétrique).
+            var ab = dtdBandedTemplate
+            for j in 0..<n {
+                let iMin = max(0, j - ku)
+                let iMax = min(n - 1, j + kl)
+                for i in iMin...iMax {
+                    let bandRow = kl + ku + i - j
+                    ab[bandRow + j * ldab] *= lam * a[i]
                 }
-                A[i][i] += w[i]
+                // Diagonale (i == j) : bandRow = kl + ku
+                ab[(kl + ku) + j * ldab] += w[j]
             }
 
-            // RHS = w * y (produit élément par élément)
+            // RHS = w * y (sera écrasé par dgbsv avec la solution)
             var b = [Double](repeating: 0.0, count: n)
             for i in 0..<n {
                 b[i] = w[i] * y[i]
             }
 
-            // Système non-symétrique (à cause de diag(a) à gauche) → solveur général
-            baseline = solveFallback(A: A, b: b)
+            // Résolution banded LU avec pivotage partiel : dgbsv_
+            var n_l = __CLPK_integer(n)
+            var kl_l = __CLPK_integer(kl)
+            var ku_l = __CLPK_integer(ku)
+            var nrhs = __CLPK_integer(1)
+            var ldab_l = __CLPK_integer(ldab)
+            var ldb_l = __CLPK_integer(n)
+            var info = __CLPK_integer(0)
+            var ipiv = [__CLPK_integer](repeating: 0, count: n)
+
+            ab.withUnsafeMutableBufferPointer { abPtr in
+                b.withUnsafeMutableBufferPointer { bPtr in
+                    _ = dgbsv_(
+                        &n_l, &kl_l, &ku_l, &nrhs,
+                        abPtr.baseAddress, &ldab_l,
+                        &ipiv,
+                        bPtr.baseAddress, &ldb_l,
+                        &info
+                    )
+                }
+            }
+            precondition(info == 0, "dgbsv_ a échoué : info=\(info)")
+            baseline = b
 
             // Résidus
             var residual = [Double](repeating: 0.0, count: n)
@@ -151,128 +194,65 @@ enum WhittakerASPLS {
             }
         }
 
-        print("   asPLS convergé après \(iterationsDone) itérations (max=\(maxIter + 1))")
         return baseline
     }
-    
-    /// Construit D^T D directement (optimisation)
+
+    /// Construit D^T D en format LAPACK band column-major.
     /// En Python : D = difference_matrix(n, diff_order); DTD = D.T @ D
     ///
     /// Pour diffOrder=2, D est la matrice de différences secondes (n-2)×n :
     /// D[i,i] = 1, D[i,i+1] = -2, D[i,i+2] = 1
+    /// D^T D résultant est une matrice pentadiagonale n×n.
     ///
-    /// D^T D résultant est une matrice pentadiagonale n×n
-    private static func buildDTD(n: Int, diffOrder: Int) -> [[Double]] {
+    /// Stockage band : buffer plat de taille `ldab * n` (column-major) ;
+    /// l'élément DTD[i,j] avec |i-j| ≤ 2 va à `ab[(kl+ku+i-j) + j*ldab]`.
+    /// Les `kl` premières lignes (réservées au pivotage) restent à 0.
+    private static func buildDTDBanded(
+        n: Int, diffOrder: Int, kl: Int, ku: Int, ldab: Int
+    ) -> [Double] {
         guard diffOrder == 2 else {
             fatalError("Seul diffOrder=2 est supporté (comme pybaselines par défaut)")
         }
-        
-        // Initialiser matrice n×n
-        var DTD = [[Double]](repeating: [Double](repeating: 0.0, count: n), count: n)
-        
-        // Pattern pentadiagonal exact de D^T D pour diffOrder=2
-        // Calculé comme suit en Python :
-        // D = np.diff(np.eye(n), n=2, axis=0)
-        // DTD = D.T @ D
-        
-        for i in 0..<n {
-            for j in 0..<n {
-                let dist = abs(i - j)
-                
-                if dist == 0 {
-                    // Diagonale principale
-                    if i == 0 || i == n - 1 {
-                        DTD[i][j] = 1.0  // Coins
-                    } else if i == 1 || i == n - 2 {
-                        DTD[i][j] = 5.0  // Près des bords
-                    } else {
-                        DTD[i][j] = 6.0  // Centre
-                    }
-                } else if dist == 1 {
-                    // Première diagonale (offset ±1)
-                    if (i == 0 && j == 1) || (i == 1 && j == 0) ||
-                       (i == n - 1 && j == n - 2) || (i == n - 2 && j == n - 1) {
-                        DTD[i][j] = -2.0  // Près des bords
-                    } else {
-                        DTD[i][j] = -4.0  // Centre
-                    }
-                } else if dist == 2 {
-                    // Deuxième diagonale (offset ±2)
-                    DTD[i][j] = 1.0
-                }
-                // dist > 2 : reste à 0
+
+        var ab = [Double](repeating: 0.0, count: ldab * n)
+
+        // Diagonale principale (i == j) : 1 aux coins, 5 aux quasi-bords, 6 au centre
+        for j in 0..<n {
+            let v: Double
+            if j == 0 || j == n - 1 {
+                v = 1.0   // Coins
+            } else if j == 1 || j == n - 2 {
+                v = 5.0   // Près des bords
+            } else {
+                v = 6.0   // Centre
             }
+            ab[(kl + ku) + j * ldab] = v
         }
-        
-        return DTD
-    }
-    
-    /// Résout un système linéaire dense A·x = b par élimination de Gauss avec pivotage partiel.
-    ///
-    /// Utilisé par `aspls` : la matrice du système `diag(α) · (λ·D^TD) + diag(w)`
-    /// n'est PAS symétrique (α multiplie chaque ligne), donc la décomposition de Cholesky
-    /// (LAPACK `dposv`) n'est pas applicable. Pour n ~ quelques centaines de points,
-    /// Gauss dense reste largement assez rapide.
-    private static func solveFallback(A: [[Double]], b: [Double]) -> [Double] {
-        let n = A.count
-        
-        // Copier A et b
-        var M = A
-        var y = b
-        
-        // Élimination de Gauss avec pivotage partiel
-        for k in 0..<n {
-            // Trouver le pivot
-            var maxRow = k
-            var maxVal = abs(M[k][k])
-            
-            for i in (k+1)..<n {
-                if abs(M[i][k]) > maxVal {
-                    maxVal = abs(M[i][k])
-                    maxRow = i
-                }
-            }
-            
-            // Échanger les lignes
-            if maxRow != k {
-                M.swapAt(k, maxRow)
-                y.swapAt(k, maxRow)
-            }
-            
-            // Élimination
-            for i in (k+1)..<n {
-                let factor = M[i][k] / M[k][k]
-                for j in k..<n {
-                    M[i][j] -= factor * M[k][j]
-                }
-                y[i] -= factor * y[k]
-            }
+
+        // Super-diagonale 1 (i = j-1) : -2 aux extrémités, -4 sinon
+        for j in 1..<n {
+            let i = j - 1
+            let v: Double = ((i == 0 && j == 1) || (i == n - 2 && j == n - 1)) ? -2.0 : -4.0
+            ab[(kl + ku - 1) + j * ldab] = v
         }
-        
-        // Substitution arrière
-        var x = [Double](repeating: 0.0, count: n)
-        for i in stride(from: n-1, through: 0, by: -1) {
-            var sum = y[i]
-            for j in (i+1)..<n {
-                sum -= M[i][j] * x[j]
-            }
-            x[i] = sum / M[i][i]
+
+        // Sub-diagonale 1 (i = j+1) : -2 aux extrémités, -4 sinon
+        for j in 0..<(n - 1) {
+            let i = j + 1
+            let v: Double = ((i == 1 && j == 0) || (i == n - 1 && j == n - 2)) ? -2.0 : -4.0
+            ab[(kl + ku + 1) + j * ldab] = v
         }
-        
-        return x
-    }
-    
-    /// Calcule le changement relatif entre deux vecteurs
-    /// En Python : relative_difference = np.sum(abs(z - z_old)) / np.sum(abs(z_old))
-    private static func computeRelativeChange(_ a: [Double], _ b: [Double]) -> Double {
-        var sumDiff = 0.0
-        var sumB = 0.0
-        
-        for i in 0..<a.count {
-            sumDiff += abs(a[i] - b[i])
-            sumB += abs(b[i])
+
+        // Super-diagonale 2 (i = j-2) : 1
+        for j in 2..<n {
+            ab[(kl + ku - 2) + j * ldab] = 1.0
         }
-        
-        return sumB > 0 ? sumDiff / sumB : 0.0
+
+        // Sub-diagonale 2 (i = j+2) : 1
+        for j in 0..<(n - 2) {
+            ab[(kl + ku + 2) + j * ldab] = 1.0
+        }
+
+        return ab
     }
 }

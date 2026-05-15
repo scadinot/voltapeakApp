@@ -57,6 +57,15 @@ class VoltapeakViewModel {
             print("📉 Calcul baseline asPLS (implémentation EXACTE pybaselines)...")
 
             let n = smoothed.count
+
+            // Garde-fou : refuser les fichiers anormalement grands en amont du
+            // solveur. Le solveur banded reste tractable bien au-delà, mais on
+            // bloque ici les acquisitions/parsing pathologiques pour qu'ils
+            // remontent comme erreur explicite à l'UI.
+            guard n <= WhittakerASPLS.maxN else {
+                throw SWVFileReader.FileError.tooManyPoints(n, limit: WhittakerASPLS.maxN)
+            }
+
             // Paramètres Python : lambdaFactor=1e3, mis à l'échelle par n²
             let lambdaFactor = 1e3
             let lam = lambdaFactor * Double(n * n)
