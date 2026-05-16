@@ -24,12 +24,13 @@
 10. [Chaîne de traitement par fichier](#chaîne-de-traitement-par-fichier)
 11. [Paramètres algorithmiques](#paramètres-algorithmiques)
 12. [Architecture du code](#architecture-du-code)
-13. [Tests](#tests)
-14. [CI/CD](#cicd)
-15. [Algorithmes & références](#algorithmes--références)
-16. [Dépannage](#dépannage)
-17. [Feuille de route](#feuille-de-route)
-18. [Licence et auteur](#licence-et-auteur)
+13. [Performance & concurrence](#performance--concurrence)
+14. [Tests](#tests)
+15. [CI/CD](#cicd)
+16. [Algorithmes & références](#algorithmes--références)
+17. [Dépannage](#dépannage)
+18. [Feuille de route](#feuille-de-route)
+19. [Licence et auteur](#licence-et-auteur)
 
 ---
 
@@ -89,7 +90,7 @@ Elles sont des **portages natifs** de leurs équivalents Python ([`scadinot/volt
 ## Prérequis
 
 - **macOS 26.1** ou supérieur (Tahoe — cible définie par `MACOSX_DEPLOYMENT_TARGET = 26.1`).
-- **Xcode 26** ou supérieur (projet créé avec Xcode 26.2, `LastUpgradeCheck = 2620`, `objectVersion = 77`, support du framework `Testing` / Swift 6).
+- **Xcode 26** ou supérieur (`objectVersion = 77`, requis pour le SDK macOS 26).
 - **Swift 5.0**.
 
 Aucune dépendance externe : tout repose sur les frameworks Apple (`SwiftUI`, `AppKit`, `Charts`, `Accelerate`, `Foundation`, `Observation`).
@@ -302,6 +303,19 @@ voltapeakApp
       ├── VoltammogramChartView (Charts)
       └── Boutons Export / ⌘E → NSSavePanel → CSV / XLSXWriter / ImageRenderer
 ```
+
+---
+
+## Performance & concurrence
+
+`voltapeakApp` est mono-fichier interactif — pas de pipeline batch parallèle. Le travail asynchrone reste néanmoins explicite :
+
+- L'analyse s'exécute en `async` (`VoltapeakViewModel.analyzeFile(at:)`), hors `MainActor`, pour ne pas bloquer la fenêtre pendant la lecture du fichier ou la résolution asPLS sur des signaux volumineux.
+- La mise à jour de l'état observable (`analysis`, `error`, `isLoading`) est exécutée via `await MainActor.run { … }`.
+- Le rendu PNG (export `⌘E` → PNG) passe par `ImageRenderer`, **strictement confiné** au `@MainActor`.
+- Aucune contention multi-fichiers : [`voltapeak_batchApp`](https://github.com/scadinot/voltapeak_batchApp) et [`voltapeak_loopsApp`](https://github.com/scadinot/voltapeak_loopsApp) couvrent ce cas avec un `TaskGroup` borné au nombre de cœurs.
+
+Le solveur asPLS (`WhittakerASPLS.baseline`) s'appuie sur `dgbsv_` (LAPACK banded via Accelerate) — O(n) au lieu de O(n³) — ce qui rend interactif l'examen de fichiers jusqu'à 200 000 points.
 
 ---
 
