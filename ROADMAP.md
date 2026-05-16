@@ -24,7 +24,7 @@ Items qui éliminent des pièges connus ou des limitations documentées dans le 
 
 - **Encodage configurable** *(commun)* — l'encodage de lecture est aujourd'hui figé à `ISO Latin-1`. Exposer dans l'UI une bascule `Latin-1 / UTF-8 / UTF-8 BOM`, avec auto-détection optionnelle (heuristique BOM + fallback Latin-1).
 - **Support du pic anodique** *(commun)* — `SWVFileReader.processData` inverse systématiquement le signe du courant. Ajouter dans la GUI une case à cocher *« Pic en courant positif (anodique) »* qui désactive l'inversion.
-- **Affinage des erreurs `FileError`** *(commun)* — enrichir les `LocalizedError` (`tooManyPoints`, `tooFewPoints`, `encodingError`, `permissionDenied`) avec des suggestions actionnables dans le bouton *Aide* de l'alerte (lien direct vers la section *Dépannage* du README).
+- **Affinage des erreurs `FileError`** *(commun)* — enrichir les `LocalizedError` (`fileNotFound`, `invalidFormat`, `insufficientData`, `tooManyPoints`, `permissionDenied`, `encodingError`) avec des suggestions actionnables dans le bouton *Aide* de l'alerte (lien direct vers la section *Dépannage* du README).
 - **Persistance du dernier fichier ouvert** *(spécifique voltapeakApp)* — au relancement, proposer de recharger le `.txt` analysé en fin de session précédente (stocké dans `UserDefaults` via un *security-scoped bookmark*, compatible avec une éventuelle réactivation de l'App Sandbox).
 
 ---
