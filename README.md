@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Swift 5.0](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
 [![macOS 26.1+](https://img.shields.io/badge/macOS-26.1+-blue.svg)](https://www.apple.com/macos/)
-[![CI](https://github.com/scadinot/voltapeakApp/actions/workflows/build-artifact.yml/badge.svg)](https://github.com/scadinot/voltapeakApp/actions/workflows/build-artifact.yml)
+[![CI](https://github.com/scadinot/voltapeakApp/actions/workflows/swift.yml/badge.svg)](https://github.com/scadinot/voltapeakApp/actions/workflows/swift.yml)
 [![Release](https://github.com/scadinot/voltapeakApp/actions/workflows/release.yml/badge.svg)](https://github.com/scadinot/voltapeakApp/actions/workflows/release.yml)
 
 ---
@@ -89,7 +89,7 @@ Elles sont des **portages natifs** de leurs équivalents Python ([`scadinot/volt
 ## Prérequis
 
 - **macOS 26.1** ou supérieur (Tahoe — cible définie par `MACOSX_DEPLOYMENT_TARGET = 26.1`).
-- **Xcode 16** ou supérieur (`objectVersion = 77`, support du framework `Testing` / Swift 6).
+- **Xcode 26** ou supérieur (projet créé avec Xcode 26.2, `LastUpgradeCheck = 2620`, `objectVersion = 77`, support du framework `Testing` / Swift 6).
 - **Swift 5.0**.
 
 Aucune dépendance externe : tout repose sur les frameworks Apple (`SwiftUI`, `AppKit`, `Charts`, `Accelerate`, `Foundation`, `Observation`).
@@ -307,7 +307,7 @@ voltapeakApp
 
 ## Tests
 
-Suite **Swift `Testing`** (`import Testing`, syntaxe `@Suite` / `@Test` / `#expect`) — pas XCTest. Nécessite Xcode 16+ / Swift 6.
+Suite **Swift `Testing`** (`import Testing`, syntaxe `@Suite` / `@Test` / `#expect`) — pas XCTest. Nécessite Xcode 26 / Swift 6.
 
 | Fichier                          | Couverture |
 |----------------------------------|------------|
